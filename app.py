@@ -129,7 +129,7 @@ def send_email(subject, body, settings):
 def show_header(subtitle=""):
     img = load_mountain_image()
     if img:
-        st.image(img, use_column_width=True)
+        st.image(img, use_container_width=True)
     st.markdown(f"""
         <div style='text-align: center; padding: 1rem 0;'>
             <h1 style='color: #FFFFFF; font-size: 2.5rem; font-weight: 800;
