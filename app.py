@@ -121,9 +121,9 @@ def send_email(subject, body, settings):
         server.login(settings['gmail_address'], settings['gmail_app_password'])
         server.send_message(msg)
         server.quit()
-        return True
+        return True, None
     except Exception as e:
-        return False
+        return False, str(e)
 
 # ── Header ────────────────────────────────────────────────────
 def show_header(subtitle=""):
@@ -268,7 +268,7 @@ def seller_page():
                     st.info("📱 SMS alert sent to owner!")
 
             if settings and settings['email_enabled'] and settings['gmail_app_password']:
-                email_sent = send_email(email_subject, email_body, settings)
+                email_sent, _ = send_email(email_subject, email_body, settings)
                 if email_sent:
                     st.info("📧 Email alert sent to owner!")
 
@@ -417,14 +417,14 @@ def settings_page():
             if not settings['gmail_app_password']:
                 st.error("⚠️ Please save your Gmail credentials first.")
             else:
-                result = send_email(
+                result, error = send_email(
                     "🏔️ Test Email - Mt Kenya Sales System",
                     "Your email alerts are working! You will receive notifications for every sale.",
                     settings)
                 if result:
                     st.success("✅ Test Email sent successfully!")
                 else:
-                    st.error("❌ Email failed. Check your Gmail credentials.")
+                    st.error(f"❌ Email failed: {error}")
 
 # ── Daily Summary ─────────────────────────────────────────────
 def send_daily_summary(settings):
@@ -452,6 +452,7 @@ def send_daily_summary(settings):
         send_sms(summary[:160], settings)
     if settings['email_enabled'] and settings['gmail_app_password']:
         send_email(f"📊 Daily Summary {today}", summary, settings)
+
 
 # ── Owner dashboard ───────────────────────────────────────────
 def owner_page():
