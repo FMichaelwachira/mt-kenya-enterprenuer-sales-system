@@ -132,14 +132,14 @@ def show_header(subtitle=""):
         st.image(img, use_column_width=True)
     st.markdown(f"""
         <div style='text-align: center; padding: 1rem 0;'>
-            <h1 style='color: #FFD700; font-size: 2.5rem; font-weight: 800;
+            <h1 style='color: #FFFFFF; font-size: 2.5rem; font-weight: 800;
                 text-shadow: 2px 2px 4px #000000;'>
                 🏔️ Mt Kenya Entrepreneur's Ltd
             </h1>
-            <p style='color: #90EE90; font-size: 1.1rem; font-style: italic;'>
+            <p style='color: #87CEEB; font-size: 1.1rem; font-style: italic;'>
                 {subtitle}
             </p>
-            <hr style='border: 2px solid #FFD700; margin: 0.5rem 0;'>
+            <hr style='border: 2px solid #4169E1; margin: 0.5rem 0;'>
         </div>
     """, unsafe_allow_html=True)
 
@@ -150,9 +150,9 @@ def login():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("""
-            <div style='background:#243d24; border: 2px solid #FFD700;
+            <div style='background:#1a2b4a; border: 2px solid #4169E1;
                 border-radius: 12px; padding: 2rem; margin-top: 1rem;'>
-                <h3 style='color: #FFD700; text-align: center;
+                <h3 style='color: #FFFFFF; text-align: center;
                     margin-bottom: 1rem;'>🔐 Login to Your Account</h3>
             </div>
         """, unsafe_allow_html=True)
@@ -178,7 +178,7 @@ def login():
                 st.error("❌ Wrong username or password. Try again.")
 
         st.markdown("""
-            <p style='color: #90EE90; text-align: center;
+            <p style='color: #87CEEB; text-align: center;
                 font-size: 0.85rem; margin-top: 1rem;'>
                 🏔️ Powered by Mt Kenya Entrepreneur's Ltd
             </p>
@@ -188,12 +188,12 @@ def login():
 def seller_page():
     show_header(f"Seller Portal — Welcome, {st.session_state.username}!")
 
-    st.markdown("<h3 style='color:#FFD700;'>📝 Record a New Sale</h3>",
+    st.markdown("<h3 style='color:#FFFFFF;'>📝 Record a New Sale</h3>",
                 unsafe_allow_html=True)
 
     with st.container():
         st.markdown("""
-            <div style='background:#243d24; border: 1px solid #FFD700;
+            <div style='background:#1a2b4a; border: 1px solid #4169E1;
                 border-radius: 10px; padding: 1rem;'>
         """, unsafe_allow_html=True)
 
@@ -206,12 +206,12 @@ def seller_page():
                                           min_value=0.0, step=10.0)
             total = quantity * unit_price
             st.markdown(f"""
-                <div style='background:#1a2e1a; border: 2px solid #FFD700;
+                <div style='background:#0d1b2e; border: 2px solid #4169E1;
                     border-radius: 10px; padding: 1rem; margin-top: 1.5rem;
                     text-align: center;'>
-                    <p style='color:#90EE90; margin:0;
+                    <p style='color:#87CEEB; margin:0;
                         font-size:0.85rem;'>Auto-calculated Total</p>
-                    <h2 style='color:#FFD700; margin:0;
+                    <h2 style='color:#FFFFFF; margin:0;
                         font-size:2rem;'>KSh {total:,.2f}</h2>
                 </div>
             """, unsafe_allow_html=True)
@@ -272,7 +272,7 @@ def seller_page():
                 if email_sent:
                     st.info("📧 Email alert sent to owner!")
 
-    st.markdown("<h3 style='color:#FFD700; margin-top:2rem;'>📊 Your Sales History</h3>",
+    st.markdown("<h3 style='color:#FFFFFF; margin-top:2rem;'>📊 Your Sales History</h3>",
                 unsafe_allow_html=True)
 
     conn = sqlite3.connect('sales.db')
@@ -290,11 +290,11 @@ def seller_page():
 
         total_earned = df["Total (KSh)"].sum()
         st.markdown(f"""
-            <div style='background:#243d24; border: 2px solid #FFD700;
+            <div style='background:#1a2b4a; border: 2px solid #4169E1;
                 border-radius: 10px; padding: 1rem; text-align: center;
                 margin-top: 1rem;'>
-                <p style='color:#90EE90; margin:0;'>Your Total Sales</p>
-                <h2 style='color:#FFD700; margin:0;'>KSh {total_earned:,.2f}</h2>
+                <p style='color:#87CEEB; margin:0;'>Your Total Sales</p>
+                <h2 style='color:#FFFFFF; margin:0;'>KSh {total_earned:,.2f}</h2>
             </div>
         """, unsafe_allow_html=True)
     else:
@@ -307,22 +307,22 @@ def seller_page():
 
 # ── Settings page ─────────────────────────────────────────────
 def settings_page():
-    st.markdown("<h3 style='color:#FFD700;'>⚙️ System Settings</h3>",
+    st.markdown("<h3 style='color:#FFFFFF;'>⚙️ System Settings</h3>",
                 unsafe_allow_html=True)
 
     settings = get_settings()
 
     st.markdown("""
-        <div style='background:#1a2e1a; border: 1px solid #FFD700;
+        <div style='background:#0d1b2e; border: 1px solid #4169E1;
             border-radius: 10px; padding: 1rem; margin-bottom: 1rem;'>
-            <p style='color:#90EE90; margin:0;'>
+            <p style='color:#87CEEB; margin:0;'>
             Configure your SMS and Email notification settings below.
             These alerts will be sent to you every time a seller records a sale.
             </p>
         </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<h4 style='color:#FFD700;'>📱 SMS Settings (Africa's Talking)</h4>",
+    st.markdown("<h4 style='color:#FFFFFF;'>📱 SMS Settings (Africa's Talking)</h4>",
                 unsafe_allow_html=True)
 
     with st.expander("ℹ️ How to get Africa's Talking credentials", expanded=False):
@@ -349,7 +349,7 @@ def settings_page():
         sms_enabled = st.checkbox("✅ Enable SMS Notifications",
                                    value=bool(settings['sms_enabled']) if settings else False)
 
-    st.markdown("<h4 style='color:#FFD700; margin-top:1rem;'>📧 Email Settings (Gmail)</h4>",
+    st.markdown("<h4 style='color:#FFFFFF; margin-top:1rem;'>📧 Email Settings (Gmail)</h4>",
                 unsafe_allow_html=True)
 
     with st.expander("ℹ️ How to get Gmail App Password", expanded=False):
@@ -395,7 +395,7 @@ def settings_page():
         st.success("✅ Settings saved successfully!")
 
     # ── Test buttons ──────────────────────────────────────────
-    st.markdown("<h4 style='color:#FFD700; margin-top:1rem;'>🧪 Test Your Settings</h4>",
+    st.markdown("<h4 style='color:#FFFFFF; margin-top:1rem;'>🧪 Test Your Settings</h4>",
                 unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
@@ -474,7 +474,7 @@ def owner_page():
             total_items = df['quantity'].sum()
             top_seller = df.groupby('seller')['total_price'].sum().idxmax()
 
-            st.markdown("<h3 style='color:#FFD700;'>📊 Business Summary</h3>",
+            st.markdown("<h3 style='color:#FFFFFF;'>📊 Business Summary</h3>",
                         unsafe_allow_html=True)
 
             col1, col2, col3, col4 = st.columns(4)
@@ -483,24 +483,24 @@ def owner_page():
             col3.metric("📦 Items Sold", int(total_items))
             col4.metric("🏆 Top Seller", top_seller)
 
-            st.markdown("<h3 style='color:#FFD700; margin-top:1.5rem;'>💹 Revenue by Seller</h3>",
+            st.markdown("<h3 style='color:#FFFFFF; margin-top:1.5rem;'>💹 Revenue by Seller</h3>",
                         unsafe_allow_html=True)
             seller_totals = df.groupby('seller')['total_price'].sum()
             st.bar_chart(seller_totals)
 
-            st.markdown("<h3 style='color:#FFD700;'>📈 Sales Over Time</h3>",
+            st.markdown("<h3 style='color:#FFFFFF;'>📈 Sales Over Time</h3>",
                         unsafe_allow_html=True)
             df['date'] = pd.to_datetime(df['date_time']).dt.date
             daily_sales = df.groupby('date')['total_price'].sum()
             st.line_chart(daily_sales)
 
-            st.markdown("<h3 style='color:#FFD700;'>🏷️ Top Selling Items</h3>",
+            st.markdown("<h3 style='color:#FFFFFF;'>🏷️ Top Selling Items</h3>",
                         unsafe_allow_html=True)
             top_items = df.groupby('item_name')['quantity'].sum().sort_values(
                 ascending=False).head(10)
             st.bar_chart(top_items)
 
-            st.markdown("<h3 style='color:#FFD700;'>📋 All Sales Records</h3>",
+            st.markdown("<h3 style='color:#FFFFFF;'>📋 All Sales Records</h3>",
                         unsafe_allow_html=True)
 
             col1, col2 = st.columns(2)
@@ -529,7 +529,7 @@ def owner_page():
                                use_container_width=True)
 
     with tab2:
-        st.markdown("<h3 style='color:#FFD700;'>👥 Manage Seller Accounts</h3>",
+        st.markdown("<h3 style='color:#FFFFFF;'>👥 Manage Seller Accounts</h3>",
                     unsafe_allow_html=True)
 
         with st.expander("➕ Add New Seller Account"):
@@ -563,12 +563,12 @@ def owner_page():
         settings_page()
 
     with tab4:
-        st.markdown("<h3 style='color:#FFD700;'>📊 Send Daily Summary</h3>",
+        st.markdown("<h3 style='color:#FFFFFF;'>📊 Send Daily Summary</h3>",
                     unsafe_allow_html=True)
         st.markdown("""
-            <div style='background:#1a2e1a; border: 1px solid #FFD700;
+            <div style='background:#0d1b2e; border: 1px solid #4169E1;
                 border-radius: 10px; padding: 1rem; margin-bottom: 1rem;'>
-                <p style='color:#90EE90; margin:0;'>
+                <p style='color:#87CEEB; margin:0;'>
                 Send today's sales summary via SMS and Email to the owner.
                 </p>
             </div>
