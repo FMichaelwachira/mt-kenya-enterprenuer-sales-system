@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt — {{ settings.business_name }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: #E8EDF2;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+        .receipt-wrapper { max-width: 380px; width: 100%; }
+        .receipt {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 8px 40px rgba(21,101,192,0.15);
+            overflow: hidden;
+        }
+        .receipt-header {
+            background: {{ settings.business_color }};
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        .receipt-header h1 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+        .receipt-header p {
+            font-size: 0.8rem;
+            opacity: 0.85;
+        }
+        .receipt-body { padding: 1.5rem; }
+        .receipt-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: #5A7A9A;
+            margin-bottom: 1.25rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px dashed #DDEAF5;
+        }
+        .receipt-items { margin-bottom: 1.25rem; }
+        .receipt-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f0f4f8;
+        }
+        .item-name { font-weight: 600; color: #1A2B3C; font-size: 0.95rem; }
+        .item-detail { font-size: 0.78rem; color: #5A7A9A; }
+        .item-total { font-weight: 700; color: {{ settings.business_color }}; }
+        .receipt-totals {
+            background: #F5F7FA;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1.25rem;
+        }
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.35rem 0;
+            font-size: 0.9rem;
+            color: #2C4A6E;
+        }
+        .total-row.grand {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: {{ settings.business_color }};
+            border-top: 2px solid {{ settings.business_color }};
+            margin-top: 0.5rem;
+            padding-top: 0.75rem;
+        }
+        .change-box {
+            background: {{ settings.business_color }};
+            color: white;
+            border-radius: 10px;
+            padding: 0.875rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.25rem;
+            font-weight: 600;
+        }
+        .receipt-footer {
+            text-align: center;
+            padding: 1rem 0 0;
+            border-top: 1px dashed #DDEAF5;
+        }
+        .footer-msg {
+            font-size: 1rem;
+            font-weight: 600;
+            color: {{ settings.business_color }};
+            margin-bottom: 0.25rem;
+        }
+        .footer-sub {
+            font-size: 0.75rem;
+            color: #5A7A9A;
+        }
+        .receipt-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+        .btn {
+            flex: 1;
+            padding: 0.875rem;
+            border-radius: 8px;
+            border: none;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-print {
+            background: {{ settings.business_color }};
+            color: white;
+        }
+        .btn-print:hover { opacity: 0.9; transform: translateY(-2px); }
+        .btn-back {
+            background: #F5F7FA;
+            color: #1A2B3C;
+            border: 1px solid #DDEAF5;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-back:hover { background: #DDEAF5; }
+        @media print {
+            body { background: white; padding: 0; }
+            .receipt { box-shadow: none; }
+            .receipt-actions { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-wrapper">
+        <div class="receipt">
+            <div class="receipt-header">
+                <h1>🏢 {{ settings.business_name }}</h1>
+                {% if settings.business_location %}
+                <p>📍 {{ settings.business_location }}</p>
+                {% endif %}
+                <p style="margin-top:0.5rem; font-family:'DM Mono',monospace; font-size:0.75rem;">
+                    RECEIPT #{{ sale.id }}
+                </p>
+            </div>
+
+            <div class="receipt-body">
+                <div class="receipt-meta">
+                    <span>👤 Served by: <strong>{{ sale.seller }}</strong></span>
+                    <span>📅 {{ sale.date_time }}</span>
+                </div>
+
+                <div class="receipt-items">
+                    <div class="receipt-item">
+                        <div>
+                            <div class="item-name">{{ sale.item_name }}</div>
+                            <div class="item-detail">
+                                {{ sale.quantity }} × {{ settings.business_currency }} {{ "%.2f"|format(sale.unit_price) }}
+                            </div>
+                        </div>
+                        <div class="item-total">
+                            {{ settings.business_currency }} {{ "%.2f"|format(sale.total_price) }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="receipt-totals">
+                    <div class="total-row">
+                        <span>Subtotal</span>
+                        <span>{{ settings.business_currency }} {{ "%.2f"|format(sale.total_price) }}</span>
+                    </div>
+                    <div class="total-row">
+                        <span>Amount Paid</span>
+                        <span>{{ settings.business_currency }} {{ "%.2f"|format(sale.amount_paid) }}</span>
+                    </div>
+                    <div class="total-row grand">
+                        <span>TOTAL</span>
+                        <span>{{ settings.business_currency }} {{ "%.2f"|format(sale.total_price) }}</span>
+                    </div>
+                </div>
+
+                <div class="change-box">
+                    <span>💵 Change Given</span>
+                    <span>{{ settings.business_currency }} {{ "%.2f"|format(sale.change_given) }}</span>
+                </div>
+
+                <div class="receipt-footer">
+                    <div class="footer-msg">Thank you for visiting us! Welcome Back! 🎉</div>
+                    <div class="footer-sub">{{ settings.business_name }} — {{ settings.business_location }}</div>
+                </div>
+
+                <div class="receipt-actions">
+                    <button class="btn btn-print" onclick="window.print()">🖨️ Print Receipt</button>
+                    <a href="/seller" class="btn btn-back">← Back</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

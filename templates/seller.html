@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seller Portal — {{ settings.business_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: {{ settings.business_color }}; --primary-dark: {{ settings.business_color }}; }
+        .btn-primary, .metric-value, .data-table .amount, .total-badge, .total-display { color: {{ settings.business_color }}; }
+        .btn-primary { background: {{ settings.business_color }}; color: white; }
+        .change-display { background: {{ settings.business_color }}; color: white; border-radius: 8px; padding: 0.75rem 1rem; text-align: center; }
+        .change-label { font-size: 0.8rem; opacity: 0.85; margin-bottom: 0.25rem; }
+        .change-amount { font-size: 1.5rem; font-weight: 700; }
+    </style>
+</head>
+<body class="dashboard-page">
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="nav-icon">🏢</span>
+            <span>{{ settings.business_name }}</span>
+        </div>
+        <div class="nav-right">
+            <span class="nav-user">👤 {{ username }}</span>
+            <a href="/logout" class="btn-logout">🚪 Logout</a>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="page-title">
+            <h2>📝 Seller Portal</h2>
+            <p>Welcome back, <strong>{{ username }}</strong>!</p>
+        </div>
+
+        {% if success %}
+        <div class="alert alert-success">✅ {{ success }}</div>
+        {% endif %}
+        {% if error %}
+        <div class="alert alert-error">❌ {{ error }}</div>
+        {% endif %}
+
+        {% if last_sale %}
+        <div class="card" style="border: 2px solid {{ settings.business_color }};">
+            <div class="card-header">
+                <h3>🧾 Sale Recorded — Print Receipt?</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-grid">
+                    <div>
+                        <div class="metric-label">Item</div>
+                        <div class="metric-value">{{ last_sale.item_name }}</div>
+                    </div>
+                    <div>
+                        <div class="metric-label">Total</div>
+                        <div class="metric-value">{{ settings.business_currency }} {{ "%.2f"|format(last_sale.total_price) }}</div>
+                    </div>
+                    <div>
+                        <div class="metric-label">Amount Paid</div>
+                        <div class="metric-value">{{ settings.business_currency }} {{ "%.2f"|format(last_sale.amount_paid) }}</div>
+                    </div>
+                    <div>
+                        <div class="metric-label">Change</div>
+                        <div class="metric-value">{{ settings.business_currency }} {{ "%.2f"|format(last_sale.change_given) }}</div>
+                    </div>
+                </div>
+                <a href="/receipt/{{ last_sale.id }}" target="_blank" class="btn-primary btn-full" style="display:block; text-align:center; text-decoration:none; padding:0.875rem; border-radius:8px; margin-top:1rem;">
+                    🖨️ View & Print Receipt
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header"><h3>🛒 Record a New Sale</h3></div>
+            <div class="card-body">
+                <form method="POST" class="sale-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>🛒 Item Name</label>
+                            <input type="text" name="item_name" placeholder="Enter item name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>📦 Quantity</label>
+                            <input type="number" name="quantity" min="1" value="1" id="quantity" oninput="calcTotal()" required>
+                        </div>
+                        <div class="form-group">
+                            <label>💵 Unit Price ({{ settings.business_currency }})</label>
+                            <input type="number" name="unit_price" min="0" step="0.01" placeholder="0.00" id="unit_price" oninput="calcTotal()" required>
+                        </div>
+                        <div class="form-group">
+                            <label>💰 Total (Auto-calculated)</label>
+                            <div class="total-display" id="total_display">{{ settings.business_currency }} 0.00</div>
+                        </div>
+                        <div class="form-group">
+                            <label>💵 Amount Given by Customer ({{ settings.business_currency }})</label>
+                            <input type="number" name="amount_paid" min="0" step="0.01" placeholder="0.00" id="amount_paid" oninput="calcChange()" required>
+                        </div>
+                        <div class="form-group">
+                            <label>🔄 Change to Give Back</label>
+                            <div class="change-display">
+                                <div class="change-label">Change</div>
+                                <div class="change-amount" id="change_display">{{ settings.business_currency }} 0.00</div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary btn-full btn-large">✅ Record Sale</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>📊 Your Sales History</h3>
+                <div class="total-badge">Total: {{ settings.business_currency }} {{ "%.2f"|format(total_earned) }}</div>
+            </div>
+            <div class="card-body">
+                {% if sales %}
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Qty</th>
+                                <th>Unit Price</th>
+                                <th>Total</th>
+                                <th>Change</th>
+                                <th>Date & Time</th>
+                                <th>Receipt</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sale in sales %}
+                            <tr>
+                                <td>{{ sale['item_name'] }}</td>
+                                <td>{{ sale['quantity'] }}</td>
+                                <td>{{ settings.business_currency }} {{ "%.2f"|format(sale['unit_price']) }}</td>
+                                <td class="amount">{{ settings.business_currency }} {{ "%.2f"|format(sale['total_price']) }}</td>
+                                <td>{{ settings.business_currency }} {{ "%.2f"|format(sale['change_given']) }}</td>
+                                <td>{{ sale['date_time'] }}</td>
+                                <td><a href="/receipt/{{ sale['id'] }}" target="_blank" style="color:{{ settings.business_color }}; text-decoration:none;">🖨️</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">📭</div>
+                    <p>No sales recorded yet. Start recording your first sale above!</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        const currency = "{{ settings.business_currency }}";
+        function calcTotal() {
+            const qty = parseFloat(document.getElementById('quantity').value) || 0;
+            const price = parseFloat(document.getElementById('unit_price').value) || 0;
+            const total = qty * price;
+            document.getElementById('total_display').textContent =
+                currency + ' ' + total.toLocaleString('en-KE', {minimumFractionDigits:2, maximumFractionDigits:2});
+            calcChange();
+        }
+        function calcChange() {
+            const qty = parseFloat(document.getElementById('quantity').value) || 0;
+            const price = parseFloat(document.getElementById('unit_price').value) || 0;
+            const total = qty * price;
+            const paid = parseFloat(document.getElementById('amount_paid').value) || 0;
+            const change = paid - total;
+            const el = document.getElementById('change_display');
+            el.textContent = currency + ' ' + Math.max(0, change).toLocaleString('en-KE', {minimumFractionDigits:2, maximumFractionDigits:2});
+            el.style.color = change < 0 ? '#ff6b6b' : 'white';
+        }
+    </script>
+</body>
+</html>

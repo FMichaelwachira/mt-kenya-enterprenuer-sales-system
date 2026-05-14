@@ -1,37 +1,26 @@
-import streamlit as st
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response
 import sqlite3
 import hashlib
-import pandas as pd
 from datetime import datetime
-import requests
-from io import BytesIO
-from PIL import Image
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import requests
+import io
+import csv
 
-# ── Mountain image from internet ─────────────────────────────
-def load_mountain_image():
-    url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Mount_Kenya.jpg/1280px-Mount_Kenya.jpg"
-    try:
-        response = requests.get(url)
-        img = Image.open(BytesIO(response.content))
-        return img
-    except:
-        return None
+app = Flask(__name__)
+app.secret_key = 'enterprise_secret_key_2026'
 
-# ── Database setup ────────────────────────────────────────────
 def init_db():
     conn = sqlite3.connect('sales.db')
     c = conn.cursor()
-
     c.execute('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         role TEXT NOT NULL
     )''')
-
     c.execute('''CREATE TABLE IF NOT EXISTS sales (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         seller TEXT NOT NULL,
@@ -39,75 +28,68 @@ def init_db():
         quantity INTEGER NOT NULL,
         unit_price REAL NOT NULL,
         total_price REAL NOT NULL,
+        amount_paid REAL NOT NULL DEFAULT 0,
+        change_given REAL NOT NULL DEFAULT 0,
         date_time TEXT NOT NULL
     )''')
-
-    # ── NEW: Settings table ───────────────────────────────────
     c.execute('''CREATE TABLE IF NOT EXISTS settings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_phone TEXT,
-        owner_email TEXT,
-        at_username TEXT,
-        at_api_key TEXT,
-        gmail_address TEXT,
-        gmail_app_password TEXT,
+        business_name TEXT DEFAULT 'My Business',
+        business_location TEXT DEFAULT '',
+        business_currency TEXT DEFAULT 'KSh',
+        business_color TEXT DEFAULT '#1565C0',
+        owner_phone TEXT DEFAULT '',
+        owner_email TEXT DEFAULT '',
+        at_username TEXT DEFAULT '',
+        at_api_key TEXT DEFAULT '',
+        gmail_address TEXT DEFAULT '',
+        gmail_app_password TEXT DEFAULT '',
         sms_enabled INTEGER DEFAULT 0,
         email_enabled INTEGER DEFAULT 0
     )''')
-
-    # Insert default empty settings row if not exists
     c.execute("SELECT COUNT(*) FROM settings")
     if c.fetchone()[0] == 0:
-        c.execute("INSERT INTO settings (owner_phone, owner_email, at_username, at_api_key, gmail_address, gmail_app_password, sms_enabled, email_enabled) VALUES ('', '', '', '', '', '', 0, 0)")
-
+        c.execute("""INSERT INTO settings
+            (business_name,business_location,business_currency,business_color,
+             owner_phone,owner_email,at_username,at_api_key,
+             gmail_address,gmail_app_password,sms_enabled,email_enabled)
+            VALUES ('My Business','','KSh','#1565C0','','','','','','',0,0)""")
+    for col in [
+        "ALTER TABLE sales ADD COLUMN amount_paid REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE sales ADD COLUMN change_given REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE settings ADD COLUMN business_name TEXT DEFAULT 'My Business'",
+        "ALTER TABLE settings ADD COLUMN business_location TEXT DEFAULT ''",
+        "ALTER TABLE settings ADD COLUMN business_currency TEXT DEFAULT 'KSh'",
+        "ALTER TABLE settings ADD COLUMN business_color TEXT DEFAULT '#1565C0'"
+    ]:
+        try: c.execute(col)
+        except: pass
     owner_pass = hashlib.sha256('owner123'.encode()).hexdigest()
-    c.execute("INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)",
+    c.execute("INSERT OR IGNORE INTO users (username,password,role) VALUES (?,?,?)",
               ('owner', owner_pass, 'owner'))
-
     conn.commit()
     conn.close()
 
-# ── Get settings ──────────────────────────────────────────────
-def get_settings():
+def get_db():
     conn = sqlite3.connect('sales.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM settings LIMIT 1")
-    row = c.fetchone()
-    conn.close()
-    if row:
-        return {
-            'id': row[0],
-            'owner_phone': row[1],
-            'owner_email': row[2],
-            'at_username': row[3],
-            'at_api_key': row[4],
-            'gmail_address': row[5],
-            'gmail_app_password': row[6],
-            'sms_enabled': row[7],
-            'email_enabled': row[8]
-        }
-    return None
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# ── Send SMS via Africa's Talking ─────────────────────────────
+def get_settings():
+    conn = get_db()
+    row = conn.execute("SELECT * FROM settings LIMIT 1").fetchone()
+    conn.close()
+    return dict(row) if row else {}
+
 def send_sms(message, settings):
     try:
         url = "https://api.africastalking.com/version1/messaging"
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/x-www-form-urlencoded",
-            "apiKey": settings['at_api_key']
-        }
-        data = {
-            "username": settings['at_username'],
-            "to": settings['owner_phone'],
-            "message": message
-        }
-        response = requests.post(url, headers=headers, data=data)
-        return response.status_code == 201
-    except Exception as e:
-        return False
+        headers = {"Accept":"application/json","Content-Type":"application/x-www-form-urlencoded","apiKey":settings['at_api_key']}
+        data = {"username":settings['at_username'],"to":settings['owner_phone'],"message":message}
+        r = requests.post(url, headers=headers, data=data)
+        return r.status_code == 201
+    except: return False
 
-# ── Send Email via Gmail SMTP ─────────────────────────────────
 def send_email(subject, body, settings):
     try:
         msg = MIMEMultipart()
@@ -115,489 +97,228 @@ def send_email(subject, body, settings):
         msg['To'] = settings['owner_email']
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
-
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(settings['gmail_address'], settings['gmail_app_password'])
-        server.send_message(msg)
-        server.quit()
+        s = smtplib.SMTP('smtp.gmail.com', 587)
+        s.ehlo(); s.starttls(); s.ehlo()
+        s.login(settings['gmail_address'], settings['gmail_app_password'])
+        s.send_message(msg); s.quit()
         return True, None
-    except Exception as e:
-        return False, str(e)
+    except Exception as e: return False, str(e)
 
-# ── Header ────────────────────────────────────────────────────
-def show_header(subtitle=""):
-    img = load_mountain_image()
-    if img:
-        st.image(img, use_container_width=True)
-    st.markdown(f"""
-        <div style='text-align: center; padding: 1rem 0;'>
-            <h1 style='color: #FFFFFF; font-size: 2.5rem; font-weight: 800;
-                text-shadow: 2px 2px 4px #000000;'>
-                🏔️ Mt Kenya Entrepreneur's Ltd
-            </h1>
-            <p style='color: #87CEEB; font-size: 1.1rem; font-style: italic;'>
-                {subtitle}
-            </p>
-            <hr style='border: 2px solid #4169E1; margin: 0.5rem 0;'>
-        </div>
-    """, unsafe_allow_html=True)
-
-# ── Login page ────────────────────────────────────────────────
+@app.route('/', methods=['GET','POST'])
 def login():
-    show_header("Sales Management System")
-
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown("""
-            <div style='background:#1a2b4a; border: 2px solid #4169E1;
-                border-radius: 12px; padding: 2rem; margin-top: 1rem;'>
-                <h3 style='color: #FFFFFF; text-align: center;
-                    margin-bottom: 1rem;'>🔐 Login to Your Account</h3>
-            </div>
-        """, unsafe_allow_html=True)
-
-        username = st.text_input("👤 Username")
-        password = st.text_input("🔑 Password", type="password")
-
-        if st.button("Login", use_container_width=True):
-            conn = sqlite3.connect('sales.db')
-            c = conn.cursor()
-            hashed = hashlib.sha256(password.encode()).hexdigest()
-            c.execute("SELECT * FROM users WHERE username=? AND password=?",
-                      (username, hashed))
-            user = c.fetchone()
-            conn.close()
-
-            if user:
-                st.session_state.logged_in = True
-                st.session_state.username = user[1]
-                st.session_state.role = user[3]
-                st.rerun()
-            else:
-                st.error("❌ Wrong username or password. Try again.")
-
-        st.markdown("""
-            <p style='color: #87CEEB; text-align: center;
-                font-size: 0.85rem; margin-top: 1rem;'>
-                🏔️ Powered by Mt Kenya Entrepreneur's Ltd
-            </p>
-        """, unsafe_allow_html=True)
-
-# ── Seller page ───────────────────────────────────────────────
-def seller_page():
-    show_header(f"Seller Portal — Welcome, {st.session_state.username}!")
-
-    st.markdown("<h3 style='color:#FFFFFF;'>📝 Record a New Sale</h3>",
-                unsafe_allow_html=True)
-
-    with st.container():
-        st.markdown("""
-            <div style='background:#1a2b4a; border: 1px solid #4169E1;
-                border-radius: 10px; padding: 1rem;'>
-        """, unsafe_allow_html=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            item_name = st.text_input("🛒 Item Name")
-            quantity = st.number_input("📦 Quantity", min_value=1, step=1)
-        with col2:
-            unit_price = st.number_input("💵 Unit Price (KSh)",
-                                          min_value=0.0, step=10.0)
-            total = quantity * unit_price
-            st.markdown(f"""
-                <div style='background:#0d1b2e; border: 2px solid #4169E1;
-                    border-radius: 10px; padding: 1rem; margin-top: 1.5rem;
-                    text-align: center;'>
-                    <p style='color:#87CEEB; margin:0;
-                        font-size:0.85rem;'>Auto-calculated Total</p>
-                    <h2 style='color:#FFFFFF; margin:0;
-                        font-size:2rem;'>KSh {total:,.2f}</h2>
-                </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    if st.button("✅ Record Sale", use_container_width=True):
-        if item_name.strip() == "":
-            st.error("⚠️ Please enter an item name.")
-        elif total == 0:
-            st.error("⚠️ Please enter quantity and price.")
+    error = None
+    settings = get_settings()
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        hashed = hashlib.sha256(password.encode()).hexdigest()
+        conn = get_db()
+        user = conn.execute("SELECT * FROM users WHERE username=? AND password=?",(username,hashed)).fetchone()
+        conn.close()
+        if user:
+            session['logged_in'] = True
+            session['username'] = user['username']
+            session['role'] = user['role']
+            return redirect(url_for('owner' if user['role']=='owner' else 'seller'))
         else:
-            conn = sqlite3.connect('sales.db')
-            c = conn.cursor()
-            c.execute("""INSERT INTO sales
-                (seller, item_name, quantity, unit_price, total_price, date_time)
-                VALUES (?, ?, ?, ?, ?, ?)""",
-                (st.session_state.username, item_name, int(quantity),
-                 unit_price, total,
+            error = "Wrong username or password. Try again."
+    return render_template('login.html', error=error, settings=settings)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/seller', methods=['GET','POST'])
+def seller():
+    if not session.get('logged_in') or session.get('role') != 'seller':
+        return redirect(url_for('login'))
+    settings = get_settings()
+    success = error = last_sale = None
+    if request.method == 'POST':
+        item_name = request.form['item_name'].strip()
+        quantity = int(request.form['quantity'])
+        unit_price = float(request.form['unit_price'])
+        amount_paid = float(request.form.get('amount_paid', 0))
+        total = quantity * unit_price
+        change = amount_paid - total
+        if not item_name:
+            error = "Please enter an item name."
+        elif total == 0:
+            error = "Please enter quantity and price."
+        elif amount_paid < total:
+            error = f"Amount paid ({settings['business_currency']} {amount_paid:,.2f}) is less than total ({settings['business_currency']} {total:,.2f})."
+        else:
+            conn = get_db()
+            cursor = conn.execute("""INSERT INTO sales
+                (seller,item_name,quantity,unit_price,total_price,amount_paid,change_given,date_time)
+                VALUES (?,?,?,?,?,?,?,?)""",
+                (session['username'],item_name,quantity,unit_price,total,amount_paid,change,
                  datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            sale_id = cursor.lastrowid
             conn.commit()
             conn.close()
-            st.success(f"✅ Sale recorded successfully! Total: KSh {total:,.2f}")
-            st.balloons()
-
-            # ── Send SMS and Email notifications ─────────────
-            settings = get_settings()
+            last_sale = {'id':sale_id,'item_name':item_name,'quantity':quantity,
+                        'unit_price':unit_price,'total_price':total,'amount_paid':amount_paid,
+                        'change_given':change,'date_time':datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        'seller':session['username']}
+            success = f"Sale recorded! Change: {settings['business_currency']} {change:,.2f}"
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            sms_message = (
-                f"🏔️ NEW SALE ALERT!\n"
-                f"Seller: {st.session_state.username}\n"
-                f"Item: {item_name}\n"
-                f"Qty: {int(quantity)}\n"
-                f"Total: KSh {total:,.2f}\n"
-                f"Time: {now}"
-            )
-            email_subject = f"🏔️ New Sale - KSh {total:,.2f} by {st.session_state.username}"
-            email_body = (
-                f"New Sale Recorded!\n\n"
-                f"Seller: {st.session_state.username}\n"
-                f"Item: {item_name}\n"
-                f"Quantity: {int(quantity)}\n"
-                f"Unit Price: KSh {unit_price:,.2f}\n"
-                f"Total: KSh {total:,.2f}\n"
-                f"Date & Time: {now}\n\n"
-                f"-- Mt Kenya Entrepreneur's Ltd"
-            )
-
-            if settings and settings['sms_enabled'] and settings['at_api_key']:
-                sms_sent = send_sms(sms_message, settings)
-                if sms_sent:
-                    st.info("📱 SMS alert sent to owner!")
-
-            if settings and settings['email_enabled'] and settings['gmail_app_password']:
-                email_sent, _ = send_email(email_subject, email_body, settings)
-                if email_sent:
-                    st.info("📧 Email alert sent to owner!")
-
-    st.markdown("<h3 style='color:#FFFFFF; margin-top:2rem;'>📊 Your Sales History</h3>",
-                unsafe_allow_html=True)
-
-    conn = sqlite3.connect('sales.db')
-    c = conn.cursor()
-    c.execute("""SELECT item_name, quantity, unit_price, total_price, date_time
-                 FROM sales WHERE seller=? ORDER BY date_time DESC""",
-              (st.session_state.username,))
-    rows = c.fetchall()
+            sms_msg = (f"NEW SALE!\nSeller: {session['username']}\nItem: {item_name}\n"
+                      f"Qty: {quantity}\nTotal: {settings['business_currency']} {total:,.2f}\n"
+                      f"Paid: {settings['business_currency']} {amount_paid:,.2f}\n"
+                      f"Change: {settings['business_currency']} {change:,.2f}\nTime: {now}")
+            email_subject = f"New Sale - {settings['business_currency']} {total:,.2f} by {session['username']}"
+            email_body = (f"New Sale!\n\nSeller: {session['username']}\nItem: {item_name}\n"
+                         f"Qty: {quantity}\nUnit Price: {settings['business_currency']} {unit_price:,.2f}\n"
+                         f"Total: {settings['business_currency']} {total:,.2f}\n"
+                         f"Paid: {settings['business_currency']} {amount_paid:,.2f}\n"
+                         f"Change: {settings['business_currency']} {change:,.2f}\n"
+                         f"Time: {now}\n\n-- {settings['business_name']}")
+            if settings.get('sms_enabled') and settings.get('at_api_key'):
+                send_sms(sms_msg, settings)
+            if settings.get('email_enabled') and settings.get('gmail_app_password'):
+                send_email(email_subject, email_body, settings)
+    conn = get_db()
+    sales = conn.execute("SELECT * FROM sales WHERE seller=? ORDER BY date_time DESC",(session['username'],)).fetchall()
     conn.close()
+    total_earned = sum(s['total_price'] for s in sales)
+    return render_template('seller.html', sales=sales, total_earned=total_earned,
+                           success=success, error=error, last_sale=last_sale,
+                           settings=settings, username=session['username'])
 
-    if rows:
-        df = pd.DataFrame(rows,
-            columns=["Item", "Qty", "Unit Price (KSh)", "Total (KSh)", "Date & Time"])
-        st.dataframe(df, use_container_width=True)
-
-        total_earned = df["Total (KSh)"].sum()
-        st.markdown(f"""
-            <div style='background:#1a2b4a; border: 2px solid #4169E1;
-                border-radius: 10px; padding: 1rem; text-align: center;
-                margin-top: 1rem;'>
-                <p style='color:#87CEEB; margin:0;'>Your Total Sales</p>
-                <h2 style='color:#FFFFFF; margin:0;'>KSh {total_earned:,.2f}</h2>
-            </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.info("📭 No sales recorded yet. Start recording your first sale above!")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🚪 Logout", use_container_width=True):
-        st.session_state.clear()
-        st.rerun()
-
-# ── Settings page ─────────────────────────────────────────────
-def settings_page():
-    st.markdown("<h3 style='color:#FFFFFF;'>⚙️ System Settings</h3>",
-                unsafe_allow_html=True)
-
+@app.route('/receipt/<int:sale_id>')
+def receipt(sale_id):
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+    conn = get_db()
+    sale = conn.execute("SELECT * FROM sales WHERE id=?",(sale_id,)).fetchone()
+    conn.close()
     settings = get_settings()
+    return render_template('receipt.html', sale=dict(sale), settings=settings)
 
-    st.markdown("""
-        <div style='background:#0d1b2e; border: 1px solid #4169E1;
-            border-radius: 10px; padding: 1rem; margin-bottom: 1rem;'>
-            <p style='color:#87CEEB; margin:0;'>
-            Configure your SMS and Email notification settings below.
-            These alerts will be sent to you every time a seller records a sale.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("<h4 style='color:#FFFFFF;'>📱 SMS Settings (Africa's Talking)</h4>",
-                unsafe_allow_html=True)
-
-    with st.expander("ℹ️ How to get Africa's Talking credentials", expanded=False):
-        st.markdown("""
-        1. Go to **https://africastalking.com** and create a free account
-        2. Go to your **Dashboard → Settings → API Key**
-        3. Copy your **Username** and **API Key**
-        4. Add your phone number in international format e.g. **+254712345678**
-        """)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        owner_phone = st.text_input("📱 Owner Phone Number",
-                                     value=settings['owner_phone'] if settings else "",
-                                     placeholder="+254712345678")
-        at_username = st.text_input("👤 Africa's Talking Username",
-                                     value=settings['at_username'] if settings else "",
-                                     placeholder="your_username")
-    with col2:
-        at_api_key = st.text_input("🔑 Africa's Talking API Key",
-                                    value=settings['at_api_key'] if settings else "",
-                                    type="password",
-                                    placeholder="Your API Key")
-        sms_enabled = st.checkbox("✅ Enable SMS Notifications",
-                                   value=bool(settings['sms_enabled']) if settings else False)
-
-    st.markdown("<h4 style='color:#FFFFFF; margin-top:1rem;'>📧 Email Settings (Gmail)</h4>",
-                unsafe_allow_html=True)
-
-    with st.expander("ℹ️ How to get Gmail App Password", expanded=False):
-        st.markdown("""
-        1. Go to your **Google Account → Security**
-        2. Enable **2-Step Verification** if not already on
-        3. Search for **"App Passwords"**
-        4. Create a new App Password for **Mail**
-        5. Copy the **16-character password** generated
-        6. Use your **Gmail address** and that **App Password** below
-        """)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        owner_email = st.text_input("📧 Owner Email (where alerts go)",
-                                     value=settings['owner_email'] if settings else "",
-                                     placeholder="owner@gmail.com")
-        gmail_address = st.text_input("📤 Gmail Address (sends the alerts)",
-                                       value=settings['gmail_address'] if settings else "",
-                                       placeholder="sender@gmail.com")
-    with col2:
-        gmail_app_password = st.text_input("🔑 Gmail App Password",
-                                            value=settings['gmail_app_password'] if settings else "",
-                                            type="password",
-                                            placeholder="16-character app password")
-        email_enabled = st.checkbox("✅ Enable Email Notifications",
-                                     value=bool(settings['email_enabled']) if settings else False)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    if st.button("💾 Save Settings", use_container_width=True):
-        conn = sqlite3.connect('sales.db')
-        c = conn.cursor()
-        c.execute("""UPDATE settings SET
-            owner_phone=?, owner_email=?, at_username=?, at_api_key=?,
-            gmail_address=?, gmail_app_password=?, sms_enabled=?, email_enabled=?
-            WHERE id=1""",
-            (owner_phone, owner_email, at_username, at_api_key,
-             gmail_address, gmail_app_password,
-             1 if sms_enabled else 0, 1 if email_enabled else 0))
-        conn.commit()
-        conn.close()
-        st.success("✅ Settings saved successfully!")
-
-    # ── Test buttons ──────────────────────────────────────────
-    st.markdown("<h4 style='color:#FFFFFF; margin-top:1rem;'>🧪 Test Your Settings</h4>",
-                unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📱 Send Test SMS", use_container_width=True):
-            settings = get_settings()
-            if not settings['at_api_key']:
-                st.error("⚠️ Please save your Africa's Talking credentials first.")
-            else:
-                result = send_sms("🏔️ Test SMS from Mt Kenya Entrepreneur's Ltd! Your SMS alerts are working.", settings)
-                if result:
-                    st.success("✅ Test SMS sent successfully!")
-                else:
-                    st.error("❌ SMS failed. Check your credentials.")
-
-    with col2:
-        if st.button("📧 Send Test Email", use_container_width=True):
-            settings = get_settings()
-            if not settings['gmail_app_password']:
-                st.error("⚠️ Please save your Gmail credentials first.")
-            else:
-                result, error = send_email(
-                    "🏔️ Test Email - Mt Kenya Sales System",
-                    "Your email alerts are working! You will receive notifications for every sale.",
-                    settings)
-                if result:
-                    st.success("✅ Test Email sent successfully!")
-                else:
-                    st.error(f"❌ Email failed: {error}")
-
-# ── Daily Summary ─────────────────────────────────────────────
-def send_daily_summary(settings):
-    conn = sqlite3.connect('sales.db')
-    today = datetime.now().strftime("%Y-%m-%d")
-    df = pd.read_sql_query(
-        f"SELECT * FROM sales WHERE date_time LIKE '{today}%'", conn)
+@app.route('/owner')
+def owner():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return redirect(url_for('login'))
+    conn = get_db()
+    sales = conn.execute("SELECT * FROM sales ORDER BY date_time DESC").fetchall()
+    users = conn.execute("SELECT username, role FROM users").fetchall()
     conn.close()
+    sales_list = [dict(s) for s in sales]
+    total_revenue = sum(s['total_price'] for s in sales_list)
+    total_sales = len(sales_list)
+    total_items = sum(s['quantity'] for s in sales_list)
+    top_seller = None
+    if sales_list:
+        st = {}
+        for s in sales_list:
+            st[s['seller']] = st.get(s['seller'],0) + s['total_price']
+        top_seller = max(st, key=st.get)
+    settings = get_settings()
+    return render_template('owner.html', sales=sales_list, users=users,
+                           total_revenue=total_revenue, total_sales=total_sales,
+                           total_items=total_items, top_seller=top_seller, settings=settings)
 
-    if df.empty:
-        summary = f"📊 Daily Summary for {today}\n\nNo sales recorded today."
-    else:
-        total = df['total_price'].sum()
-        count = len(df)
-        top_seller = df.groupby('seller')['total_price'].sum().idxmax()
-        summary = (
-            f"📊 Daily Sales Summary — {today}\n\n"
-            f"Total Revenue: KSh {total:,.2f}\n"
-            f"Total Sales: {count}\n"
-            f"Top Seller: {top_seller}\n\n"
-            f"-- Mt Kenya Entrepreneur's Ltd"
-        )
+@app.route('/add_seller', methods=['POST'])
+def add_seller():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return jsonify({'success':False})
+    username = request.form['username'].strip()
+    password = request.form['password'].strip()
+    if not username or not password:
+        return jsonify({'success':False,'message':'Please fill in both fields.'})
+    try:
+        conn = get_db()
+        hashed = hashlib.sha256(password.encode()).hexdigest()
+        conn.execute("INSERT INTO users (username,password,role) VALUES (?,?,?)",(username,hashed,'seller'))
+        conn.commit(); conn.close()
+        return jsonify({'success':True,'message':f"Seller '{username}' added!"})
+    except:
+        return jsonify({'success':False,'message':'Username already exists.'})
 
-    if settings['sms_enabled'] and settings['at_api_key']:
-        send_sms(summary[:160], settings)
-    if settings['email_enabled'] and settings['gmail_app_password']:
-        send_email(f"📊 Daily Summary {today}", summary, settings)
+@app.route('/save_settings', methods=['POST'])
+def save_settings():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return jsonify({'success':False})
+    conn = get_db()
+    conn.execute("""UPDATE settings SET
+        business_name=?,business_location=?,business_currency=?,business_color=?,
+        owner_phone=?,owner_email=?,at_username=?,at_api_key=?,
+        gmail_address=?,gmail_app_password=?,sms_enabled=?,email_enabled=?
+        WHERE id=1""",
+        (request.form.get('business_name','My Business'),
+         request.form.get('business_location',''),
+         request.form.get('business_currency','KSh'),
+         request.form.get('business_color','#1565C0'),
+         request.form.get('owner_phone',''),
+         request.form.get('owner_email',''),
+         request.form.get('at_username',''),
+         request.form.get('at_api_key',''),
+         request.form.get('gmail_address',''),
+         request.form.get('gmail_app_password',''),
+         1 if request.form.get('sms_enabled') else 0,
+         1 if request.form.get('email_enabled') else 0))
+    conn.commit(); conn.close()
+    return jsonify({'success':True,'message':'Settings saved!'})
 
+@app.route('/test_sms')
+def test_sms():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return jsonify({'success':False})
+    settings = get_settings()
+    result = send_sms(f"Test SMS from {settings['business_name']}! SMS alerts working.", settings)
+    return jsonify({'success':result})
 
-# ── Owner dashboard ───────────────────────────────────────────
-def owner_page():
-    show_header("Owner Dashboard")
+@app.route('/test_email')
+def test_email():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return jsonify({'success':False})
+    settings = get_settings()
+    result, error = send_email(f"Test - {settings['business_name']}","Email alerts working!",settings)
+    return jsonify({'success':result,'error':error})
 
-    # Navigation tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "👥 Manage Sellers", "⚙️ Settings", "📊 Daily Summary"])
+@app.route('/export_csv')
+def export_csv():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return redirect(url_for('login'))
+    settings = get_settings()
+    conn = get_db()
+    sales = conn.execute("SELECT * FROM sales ORDER BY date_time DESC").fetchall()
+    conn.close()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['ID','Seller','Item','Qty','Unit Price','Total','Amount Paid','Change','Date & Time'])
+    for s in sales:
+        writer.writerow([s['id'],s['seller'],s['item_name'],s['quantity'],
+                         s['unit_price'],s['total_price'],s['amount_paid'],s['change_given'],s['date_time']])
+    biz = settings.get('business_name','sales').replace(' ','-').lower()
+    return Response(output.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition':f'attachment;filename={biz}-sales.csv'})
 
-    with tab1:
-        conn = sqlite3.connect('sales.db')
-        df = pd.read_sql_query(
-            "SELECT * FROM sales ORDER BY date_time DESC", conn)
-        conn.close()
+@app.route('/api/sales_data')
+def sales_data():
+    if not session.get('logged_in'):
+        return jsonify({})
+    conn = get_db()
+    sales = conn.execute("SELECT * FROM sales ORDER BY date_time DESC").fetchall()
+    conn.close()
+    sales_list = [dict(s) for s in sales]
+    seller_totals = {}; daily_totals = {}; item_totals = {}
+    today = datetime.now().strftime("%Y-%m-%d")
+    today_revenue = 0; today_count = 0
+    for s in sales_list:
+        seller_totals[s['seller']] = seller_totals.get(s['seller'],0) + s['total_price']
+        date = s['date_time'][:10]
+        daily_totals[date] = daily_totals.get(date,0) + s['total_price']
+        item_totals[s['item_name']] = item_totals.get(s['item_name'],0) + s['quantity']
+        if date == today:
+            today_revenue += s['total_price']
+            today_count += 1
+    return jsonify({'seller_totals':seller_totals,'daily_totals':daily_totals,
+                    'item_totals':dict(sorted(item_totals.items(),key=lambda x:x[1],reverse=True)[:10]),
+                    'today_revenue':today_revenue,'today_count':today_count})
 
-        if df.empty:
-            st.info("📭 No sales recorded yet.")
-        else:
-            total_revenue = df['total_price'].sum()
-            total_sales = len(df)
-            total_items = df['quantity'].sum()
-            top_seller = df.groupby('seller')['total_price'].sum().idxmax()
-
-            st.markdown("<h3 style='color:#FFFFFF;'>📊 Business Summary</h3>",
-                        unsafe_allow_html=True)
-
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("💰 Total Revenue", f"KSh {total_revenue:,.2f}")
-            col2.metric("🧾 Total Sales", total_sales)
-            col3.metric("📦 Items Sold", int(total_items))
-            col4.metric("🏆 Top Seller", top_seller)
-
-            st.markdown("<h3 style='color:#FFFFFF; margin-top:1.5rem;'>💹 Revenue by Seller</h3>",
-                        unsafe_allow_html=True)
-            seller_totals = df.groupby('seller')['total_price'].sum()
-            st.bar_chart(seller_totals)
-
-            st.markdown("<h3 style='color:#FFFFFF;'>📈 Sales Over Time</h3>",
-                        unsafe_allow_html=True)
-            df['date'] = pd.to_datetime(df['date_time']).dt.date
-            daily_sales = df.groupby('date')['total_price'].sum()
-            st.line_chart(daily_sales)
-
-            st.markdown("<h3 style='color:#FFFFFF;'>🏷️ Top Selling Items</h3>",
-                        unsafe_allow_html=True)
-            top_items = df.groupby('item_name')['quantity'].sum().sort_values(
-                ascending=False).head(10)
-            st.bar_chart(top_items)
-
-            st.markdown("<h3 style='color:#FFFFFF;'>📋 All Sales Records</h3>",
-                        unsafe_allow_html=True)
-
-            col1, col2 = st.columns(2)
-            with col1:
-                sellers = ['All'] + list(df['seller'].unique())
-                selected_seller = st.selectbox("Filter by Seller", sellers)
-            with col2:
-                dates = ['All'] + list(df['date'].astype(str).unique())
-                selected_date = st.selectbox("Filter by Date", dates)
-
-            filtered_df = df.copy()
-            if selected_seller != 'All':
-                filtered_df = filtered_df[filtered_df['seller'] == selected_seller]
-            if selected_date != 'All':
-                filtered_df = filtered_df[
-                    filtered_df['date'].astype(str) == selected_date]
-
-            st.dataframe(
-                filtered_df[['seller', 'item_name', 'quantity',
-                             'unit_price', 'total_price', 'date_time']],
-                use_container_width=True)
-
-            csv = filtered_df.to_csv(index=False)
-            st.download_button("📥 Export to CSV", csv,
-                               "mt_kenya_sales.csv", "text/csv",
-                               use_container_width=True)
-
-    with tab2:
-        st.markdown("<h3 style='color:#FFFFFF;'>👥 Manage Seller Accounts</h3>",
-                    unsafe_allow_html=True)
-
-        with st.expander("➕ Add New Seller Account"):
-            new_username = st.text_input("New Seller Username")
-            new_password = st.text_input("New Seller Password", type="password")
-            if st.button("Add Seller", use_container_width=True):
-                if new_username.strip() == "" or new_password.strip() == "":
-                    st.error("⚠️ Please fill in both fields.")
-                else:
-                    try:
-                        conn = sqlite3.connect('sales.db')
-                        c = conn.cursor()
-                        hashed = hashlib.sha256(new_password.encode()).hexdigest()
-                        c.execute(
-                            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                            (new_username, hashed, 'seller'))
-                        conn.commit()
-                        conn.close()
-                        st.success(f"✅ Seller '{new_username}' added successfully!")
-                    except:
-                        st.error("⚠️ Username already exists. Try a different one.")
-
-        with st.expander("👀 View All Seller Accounts"):
-            conn = sqlite3.connect('sales.db')
-            users_df = pd.read_sql_query(
-                "SELECT username, role FROM users", conn)
-            conn.close()
-            st.dataframe(users_df, use_container_width=True)
-
-    with tab3:
-        settings_page()
-
-    with tab4:
-        st.markdown("<h3 style='color:#FFFFFF;'>📊 Send Daily Summary</h3>",
-                    unsafe_allow_html=True)
-        st.markdown("""
-            <div style='background:#0d1b2e; border: 1px solid #4169E1;
-                border-radius: 10px; padding: 1rem; margin-bottom: 1rem;'>
-                <p style='color:#87CEEB; margin:0;'>
-                Send today's sales summary via SMS and Email to the owner.
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
-
-        if st.button("📤 Send Daily Summary Now", use_container_width=True):
-            settings = get_settings()
-            if not settings['at_api_key'] and not settings['gmail_app_password']:
-                st.error("⚠️ Please configure your SMS or Email settings first.")
-            else:
-                send_daily_summary(settings)
-                st.success("✅ Daily summary sent!")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🚪 Logout", use_container_width=True):
-        st.session_state.clear()
-        st.rerun()
-
-# ── Main ──────────────────────────────────────────────────────
-init_db()
-
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-
-if not st.session_state.logged_in:
-    login()
-else:
-    if st.session_state.role == 'seller':
-        seller_page()
-    else:
-        owner_page()
+if __name__ == '__main__':
+    init_db()
+    app.run(debug=True)

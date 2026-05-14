@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ settings.business_name }} — Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: {{ settings.business_color }}; --primary-dark: {{ settings.business_color }}; }
+        .btn-primary { background: {{ settings.business_color }}; }
+    </style>
+</head>
+<body class="login-page">
+    <div class="login-bg">
+        <div class="bg-overlay"></div>
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Mount_Kenya.jpg/1280px-Mount_Kenya.jpg"
+             alt="Background" class="bg-image">
+    </div>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="mountain-icon">🏢</div>
+                <h1>{{ settings.business_name }}</h1>
+                <p>Sales Management System</p>
+            </div>
+            {% if error %}
+            <div class="alert alert-error">❌ {{ error }}</div>
+            {% endif %}
+            <form method="POST" class="login-form">
+                <div class="form-group">
+                    <label>👤 Username</label>
+                    <input type="text" name="username" placeholder="Enter your username" required>
+                </div>
+                <div class="form-group">
+                    <label>🔑 Password</label>
+                    <input type="password" name="password" placeholder="Enter your password" required>
+                </div>
+                <button type="submit" class="btn-primary btn-full">Login to Your Account</button>
+            </form>
+            <div class="login-footer">Powered by {{ settings.business_name }}</div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
