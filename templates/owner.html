@@ -3,31 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Owner Dashboard — Mt Kenya</title>
+    <title>Owner Dashboard — {{ settings.business_name }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        :root { --primary: {{ settings.business_color }}; --primary-dark: {{ settings.business_color }}; }
+        .btn-primary { background: {{ settings.business_color }}; color: white; }
+        .metric-value { color: {{ settings.business_color }}; }
+        .data-table .amount { color: {{ settings.business_color }}; }
+        .total-badge { color: {{ settings.business_color }}; }
+        .profit-badge { background: rgba(46,125,50,0.1); color: #2E7D32; border: 1px solid rgba(46,125,50,0.3); border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.8rem; font-weight: 600; }
+        .stock-low { color: #C62828; font-weight: 600; }
+        .stock-ok { color: #2E7D32; font-weight: 600; }
+        .activity-sale { border-left: 3px solid #2E7D32; }
+        .activity-login { border-left: 3px solid {{ settings.business_color }}; }
+        .activity-delete { border-left: 3px solid #C62828; }
+        .activity-restock { border-left: 3px solid #F57F17; }
+        .activity-item { padding: 0.75rem 1rem; margin-bottom: 0.5rem; background: #F5F7FA; border-radius: 8px; font-size: 0.85rem; }
+        .fast-mover-bar { background: {{ settings.business_color }}; height: 8px; border-radius: 4px; margin-top: 0.25rem; }
+    </style>
 </head>
 <body class="dashboard-page">
 
-    <!-- Navbar -->
     <nav class="navbar">
         <div class="nav-brand">
-            <span class="nav-icon">🏔️</span>
-            <span>Mt Kenya Entrepreneur's Ltd</span>
+            <span class="nav-icon">🏢</span>
+            <span>{{ settings.business_name }}</span>
         </div>
         <div class="nav-right">
-            <span class="nav-user">👑 Owner Dashboard</span>
+            <span class="nav-user">👑 Owner</span>
+            <a href="/inventory" class="btn-secondary" style="padding:0.5rem 1rem; font-size:0.85rem;">📦 Inventory</a>
             <a href="/logout" class="btn-logout">🚪 Logout</a>
         </div>
     </nav>
 
-    <!-- Tab Navigation -->
     <div class="tab-nav">
-        <button class="tab-btn active" onclick="showTab('dashboard')">📊 Dashboard</button>
-        <button class="tab-btn" onclick="showTab('sellers')">👥 Sellers</button>
-        <button class="tab-btn" onclick="showTab('settings')">⚙️ Settings</button>
-        <button class="tab-btn" onclick="showTab('summary')">📈 Daily Summary</button>
+        <button class="tab-btn active" onclick="showTab('dashboard', this)">📊 Dashboard</button>
+        <button class="tab-btn" onclick="showTab('sales', this)">🧾 Sales</button>
+        <button class="tab-btn" onclick="showTab('sellers', this)">👥 Staff</button>
+        <button class="tab-btn" onclick="showTab('settings', this)">⚙️ Settings</button>
+        <button class="tab-btn" onclick="showTab('activity', this)">🛡️ Activity Log</button>
     </div>
 
     <div class="main-content">
@@ -35,12 +51,31 @@
         <!-- ── DASHBOARD TAB ── -->
         <div id="tab-dashboard" class="tab-content active">
 
+            <!-- Alerts -->
+            {% if low_stock %}
+            <div class="alert alert-error" style="margin-bottom:1rem;">
+                🚨 <strong>{{ low_stock|length }} products</strong> are running low on stock!
+                <a href="/inventory" style="color:#C62828; font-weight:700; margin-left:0.5rem;">View Inventory →</a>
+            </div>
+            {% endif %}
+            {% if expiring %}
+            <div class="alert" style="background:rgba(245,127,23,0.1); border:1px solid rgba(245,127,23,0.4); color:#F57F17; margin-bottom:1rem;">
+                ⏰ <strong>{{ expiring|length }} products</strong> expiring within 7 days!
+                <a href="/inventory" style="color:#F57F17; font-weight:700; margin-left:0.5rem;">View Inventory →</a>
+            </div>
+            {% endif %}
+
             <!-- Metrics -->
             <div class="metrics-grid">
                 <div class="metric-card">
                     <div class="metric-icon">💰</div>
-                    <div class="metric-value">KSh {{ "%.2f"|format(total_revenue) }}</div>
+                    <div class="metric-value">{{ settings.business_currency }} {{ "%.2f"|format(total_revenue) }}</div>
                     <div class="metric-label">Total Revenue</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon">📈</div>
+                    <div class="metric-value" style="color:#2E7D32;">{{ settings.business_currency }} {{ "%.2f"|format(total_profit) }}</div>
+                    <div class="metric-label">Total Profit</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-icon">🧾</div>
@@ -57,32 +92,57 @@
                     <div class="metric-value">{{ top_seller or 'N/A' }}</div>
                     <div class="metric-label">Top Seller</div>
                 </div>
+                <div class="metric-card">
+                    <div class="metric-icon">🚨</div>
+                    <div class="metric-value" style="color:#C62828;">{{ low_stock|length }}</div>
+                    <div class="metric-label">Low Stock Items</div>
+                </div>
             </div>
 
             <!-- Charts -->
             <div class="charts-grid">
                 <div class="card">
                     <div class="card-header"><h3>💹 Revenue by Seller</h3></div>
-                    <div class="card-body">
-                        <canvas id="sellerChart"></canvas>
-                    </div>
+                    <div class="card-body"><canvas id="sellerChart"></canvas></div>
                 </div>
                 <div class="card">
                     <div class="card-header"><h3>📈 Sales Over Time</h3></div>
-                    <div class="card-body">
-                        <canvas id="dailyChart"></canvas>
-                    </div>
+                    <div class="card-body"><canvas id="dailyChart"></canvas></div>
                 </div>
             </div>
 
+            <!-- Fast Movers -->
+            <div class="card">
+                <div class="card-header"><h3>🔥 Fast Moving Products</h3></div>
+                <div class="card-body">
+                    {% if fast_movers %}
+                    {% set max_qty = fast_movers[0][1] %}
+                    {% for name, qty in fast_movers %}
+                    <div style="margin-bottom:1rem;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">
+                            <span style="font-weight:600; color:#1A2B3C;">{{ name }}</span>
+                            <span class="profit-badge">{{ qty }} units sold</span>
+                        </div>
+                        <div style="background:#E8EDF2; border-radius:4px; height:8px;">
+                            <div class="fast-mover-bar" style="width:{{ (qty/max_qty*100)|int }}%;"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="empty-state"><p>No sales data yet.</p></div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Items Chart -->
             <div class="card">
                 <div class="card-header"><h3>🏷️ Top Selling Items</h3></div>
-                <div class="card-body">
-                    <canvas id="itemChart"></canvas>
-                </div>
+                <div class="card-body"><canvas id="itemChart"></canvas></div>
             </div>
+        </div>
 
-            <!-- Sales Table -->
+        <!-- ── SALES TAB ── -->
+        <div id="tab-sales" class="tab-content">
             <div class="card">
                 <div class="card-header">
                     <h3>📋 All Sales Records</h3>
@@ -90,20 +150,17 @@
                 </div>
                 <div class="card-body">
                     <div class="filter-row">
-                        <input type="text" id="searchInput" placeholder="🔍 Search by seller or item..."
-                               oninput="filterTable()">
+                        <input type="text" id="searchInput" placeholder="🔍 Search by seller or item..." oninput="filterTable()">
                     </div>
                     {% if sales %}
                     <div class="table-wrapper">
                         <table class="data-table" id="salesTable">
                             <thead>
                                 <tr>
-                                    <th>Seller</th>
-                                    <th>Item</th>
-                                    <th>Qty</th>
-                                    <th>Unit Price</th>
-                                    <th>Total</th>
-                                    <th>Date & Time</th>
+                                    <th>Seller</th><th>Item</th><th>Qty</th>
+                                    <th>Unit Price</th><th>Total</th>
+                                    <th>Paid</th><th>Change</th>
+                                    <th>Date & Time</th><th>Receipt</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -112,30 +169,30 @@
                                     <td>{{ sale['seller'] }}</td>
                                     <td>{{ sale['item_name'] }}</td>
                                     <td>{{ sale['quantity'] }}</td>
-                                    <td>KSh {{ "%.2f"|format(sale['unit_price']) }}</td>
-                                    <td class="amount">KSh {{ "%.2f"|format(sale['total_price']) }}</td>
+                                    <td>{{ settings.business_currency }} {{ "%.2f"|format(sale['unit_price']) }}</td>
+                                    <td class="amount">{{ settings.business_currency }} {{ "%.2f"|format(sale['total_price']) }}</td>
+                                    <td>{{ settings.business_currency }} {{ "%.2f"|format(sale['amount_paid']) }}</td>
+                                    <td>{{ settings.business_currency }} {{ "%.2f"|format(sale['change_given']) }}</td>
                                     <td>{{ sale['date_time'] }}</td>
+                                    <td><a href="/receipt/{{ sale['id'] }}" target="_blank" style="color:{{ settings.business_color }}; text-decoration:none; font-size:1.1rem;">🖨️</a></td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                     {% else %}
-                    <div class="empty-state">
-                        <div class="empty-icon">📭</div>
-                        <p>No sales recorded yet.</p>
-                    </div>
+                    <div class="empty-state"><div class="empty-icon">📭</div><p>No sales recorded yet.</p></div>
                     {% endif %}
                 </div>
             </div>
         </div>
 
-        <!-- ── SELLERS TAB ── -->
+        <!-- ── STAFF TAB ── -->
         <div id="tab-sellers" class="tab-content">
+            <div id="seller-alert"></div>
             <div class="card">
-                <div class="card-header"><h3>➕ Add New Seller</h3></div>
+                <div class="card-header"><h3>➕ Add Staff Member</h3></div>
                 <div class="card-body">
-                    <div id="seller-alert"></div>
                     <div class="form-grid">
                         <div class="form-group">
                             <label>👤 Username</label>
@@ -145,19 +202,24 @@
                             <label>🔑 Password</label>
                             <input type="password" id="new_password" placeholder="Enter password">
                         </div>
+                        <div class="form-group">
+                            <label>🎭 Role</label>
+                            <select id="new_role" style="background:#fff; border:1px solid #DDEAF5; border-radius:8px; padding:0.75rem 1rem; color:#1A2B3C; font-family:inherit; font-size:0.9rem; width:100%;">
+                                <option value="seller">Cashier / Seller</option>
+                                <option value="manager">Manager</option>
+                                <option value="stock_keeper">Stock Keeper</option>
+                            </select>
+                        </div>
                     </div>
-                    <button class="btn-primary" onclick="addSeller()">➕ Add Seller</button>
+                    <button class="btn-primary" onclick="addSeller()">➕ Add Staff Member</button>
                 </div>
             </div>
-
             <div class="card">
-                <div class="card-header"><h3>👥 All Accounts</h3></div>
+                <div class="card-header"><h3>👥 All Staff Accounts</h3></div>
                 <div class="card-body">
                     <div class="table-wrapper">
                         <table class="data-table">
-                            <thead>
-                                <tr><th>Username</th><th>Role</th></tr>
-                            </thead>
+                            <thead><tr><th>Username</th><th>Role</th></tr></thead>
                             <tbody>
                                 {% for user in users %}
                                 <tr>
@@ -177,34 +239,53 @@
             <div id="settings-alert"></div>
 
             <div class="card">
-                <div class="card-header"><h3>📱 SMS Settings (Africa's Talking)</h3></div>
+                <div class="card-header"><h3>🏢 Business Identity</h3></div>
                 <div class="card-body">
-                    <div class="info-box">
-                        ℹ️ Go to <strong>africastalking.com</strong> to get your free API Key
-                    </div>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label>📱 Owner Phone Number</label>
-                            <input type="text" id="owner_phone"
-                                   value="{{ settings.get('owner_phone', '') }}"
-                                   placeholder="+254712345678">
+                            <label>🏢 Business Name</label>
+                            <input type="text" id="business_name" value="{{ settings.get('business_name','') }}" placeholder="Your Business Name">
                         </div>
                         <div class="form-group">
-                            <label>👤 Africa's Talking Username</label>
-                            <input type="text" id="at_username"
-                                   value="{{ settings.get('at_username', '') }}"
-                                   placeholder="sandbox or your username">
+                            <label>📍 Location</label>
+                            <input type="text" id="business_location" value="{{ settings.get('business_location','') }}" placeholder="e.g. Nairobi, Kenya">
                         </div>
                         <div class="form-group">
-                            <label>🔑 API Key</label>
-                            <input type="password" id="at_api_key"
-                                   value="{{ settings.get('at_api_key', '') }}"
-                                   placeholder="Your API Key">
+                            <label>💱 Currency</label>
+                            <input type="text" id="business_currency" value="{{ settings.get('business_currency','KSh') }}" placeholder="KSh">
+                        </div>
+                        <div class="form-group">
+                            <label>🎨 Brand Color</label>
+                            <input type="color" id="business_color" value="{{ settings.get('business_color','#1565C0') }}" style="height:45px; padding:0.25rem;">
+                        </div>
+                        <div class="form-group">
+                            <label>🚨 Low Stock Alert Level</label>
+                            <input type="number" id="low_stock_threshold" value="{{ settings.get('low_stock_threshold', 5) }}" min="1" placeholder="5">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h3>📱 SMS Settings (Africa's Talking)</h3></div>
+                <div class="card-body">
+                    <div class="info-box">ℹ️ Go to <strong>africastalking.com</strong> to get your free API Key</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>📱 Owner Phone</label>
+                            <input type="text" id="owner_phone" value="{{ settings.get('owner_phone','') }}" placeholder="+254712345678">
+                        </div>
+                        <div class="form-group">
+                            <label>👤 AT Username</label>
+                            <input type="text" id="at_username" value="{{ settings.get('at_username','') }}" placeholder="sandbox">
+                        </div>
+                        <div class="form-group">
+                            <label>🔑 AT API Key</label>
+                            <input type="password" id="at_api_key" value="{{ settings.get('at_api_key','') }}">
                         </div>
                         <div class="form-group checkbox-group">
                             <label>
-                                <input type="checkbox" id="sms_enabled"
-                                       {% if settings.get('sms_enabled') %}checked{% endif %}>
+                                <input type="checkbox" id="sms_enabled" {% if settings.get('sms_enabled') %}checked{% endif %}>
                                 ✅ Enable SMS Notifications
                             </label>
                         </div>
@@ -216,32 +297,23 @@
             <div class="card">
                 <div class="card-header"><h3>📧 Email Settings (Gmail)</h3></div>
                 <div class="card-body">
-                    <div class="info-box">
-                        ℹ️ Go to <strong>myaccount.google.com/apppasswords</strong> to get your App Password
-                    </div>
+                    <div class="info-box">ℹ️ Go to <strong>myaccount.google.com/apppasswords</strong> to get App Password</div>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label>📧 Owner Email (receives alerts)</label>
-                            <input type="email" id="owner_email"
-                                   value="{{ settings.get('owner_email', '') }}"
-                                   placeholder="owner@gmail.com">
+                            <label>📧 Owner Email</label>
+                            <input type="email" id="owner_email" value="{{ settings.get('owner_email','') }}" placeholder="owner@gmail.com">
                         </div>
                         <div class="form-group">
-                            <label>📤 Gmail Address (sends alerts)</label>
-                            <input type="email" id="gmail_address"
-                                   value="{{ settings.get('gmail_address', '') }}"
-                                   placeholder="sender@gmail.com">
+                            <label>📤 Gmail Address</label>
+                            <input type="email" id="gmail_address" value="{{ settings.get('gmail_address','') }}" placeholder="sender@gmail.com">
                         </div>
                         <div class="form-group">
-                            <label>🔑 Gmail App Password</label>
-                            <input type="password" id="gmail_app_password"
-                                   value="{{ settings.get('gmail_app_password', '') }}"
-                                   placeholder="16-character app password">
+                            <label>🔑 App Password</label>
+                            <input type="password" id="gmail_app_password" value="{{ settings.get('gmail_app_password','') }}">
                         </div>
                         <div class="form-group checkbox-group">
                             <label>
-                                <input type="checkbox" id="email_enabled"
-                                       {% if settings.get('email_enabled') %}checked{% endif %}>
+                                <input type="checkbox" id="email_enabled" {% if settings.get('email_enabled') %}checked{% endif %}>
                                 ✅ Enable Email Notifications
                             </label>
                         </div>
@@ -250,33 +322,30 @@
                 </div>
             </div>
 
-            <button class="btn-primary btn-full btn-large" onclick="saveSettings()">
-                💾 Save All Settings
-            </button>
+            <button class="btn-primary btn-full btn-large" onclick="saveSettings()">💾 Save All Settings</button>
         </div>
 
-        <!-- ── DAILY SUMMARY TAB ── -->
-        <div id="tab-summary" class="tab-content">
+        <!-- ── ACTIVITY LOG TAB ── -->
+        <div id="tab-activity" class="tab-content">
             <div class="card">
-                <div class="card-header"><h3>📊 Send Daily Summary</h3></div>
+                <div class="card-header"><h3>🛡️ Activity Log</h3></div>
                 <div class="card-body">
-                    <div class="info-box">
-                        ℹ️ This sends today's complete sales report via SMS and Email to the owner.
-                    </div>
-                    <div class="summary-stats">
-                        <div class="summary-item">
-                            <span class="summary-label">Today's Revenue</span>
-                            <span class="summary-value" id="today-revenue">Calculating...</span>
+                    {% if activity %}
+                    {% for log in activity %}
+                    <div class="activity-item activity-{{ log['action']|lower }}">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <strong style="color:#1A2B3C;">{{ log['username'] }}</strong>
+                                <span style="color:#5A7A9A; margin:0 0.5rem;">—</span>
+                                <span style="color:#2C4A6E;">{{ log['details'] }}</span>
+                            </div>
+                            <span style="color:#5A7A9A; font-size:0.8rem; white-space:nowrap;">{{ log['date_time'] }}</span>
                         </div>
-                        <div class="summary-item">
-                            <span class="summary-label">Today's Sales</span>
-                            <span class="summary-value" id="today-sales">Calculating...</span>
-                        </div>
                     </div>
-                    <button class="btn-primary btn-full" onclick="sendDailySummary()">
-                        📤 Send Daily Summary Now
-                    </button>
-                    <div id="summary-alert" style="margin-top:1rem;"></div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="empty-state"><div class="empty-icon">🛡️</div><p>No activity recorded yet.</p></div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -285,74 +354,43 @@
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
-        // Load charts
         fetch('/api/sales_data')
             .then(r => r.json())
             .then(data => {
-                const chartDefaults = {
-                    backgroundColor: ['#1E90FF','#00BFFF','#87CEEB','#4169E1','#6495ED'],
-                    borderColor: '#1E90FF',
-                    borderWidth: 2
-                };
-
-                // Seller Chart
                 if (Object.keys(data.seller_totals).length > 0) {
                     new Chart(document.getElementById('sellerChart'), {
                         type: 'bar',
                         data: {
                             labels: Object.keys(data.seller_totals),
-                            datasets: [{
-                                label: 'Revenue (KSh)',
-                                data: Object.values(data.seller_totals),
-                                backgroundColor: '#1E90FF',
-                                borderRadius: 8
-                            }]
+                            datasets: [{ label: 'Revenue', data: Object.values(data.seller_totals),
+                                backgroundColor: '{{ settings.business_color }}', borderRadius: 8 }]
                         },
                         options: { responsive: true, plugins: { legend: { display: false } } }
                     });
                 }
-
-                // Daily Chart
                 if (Object.keys(data.daily_totals).length > 0) {
                     new Chart(document.getElementById('dailyChart'), {
                         type: 'line',
                         data: {
                             labels: Object.keys(data.daily_totals),
-                            datasets: [{
-                                label: 'Revenue (KSh)',
-                                data: Object.values(data.daily_totals),
-                                borderColor: '#1E90FF',
-                                backgroundColor: 'rgba(30,144,255,0.1)',
-                                fill: true,
-                                tension: 0.4
-                            }]
+                            datasets: [{ label: 'Revenue', data: Object.values(data.daily_totals),
+                                borderColor: '{{ settings.business_color }}',
+                                backgroundColor: 'rgba(21,101,192,0.1)', fill: true, tension: 0.4 }]
                         },
                         options: { responsive: true, plugins: { legend: { display: false } } }
                     });
                 }
-
-                // Items Chart
                 if (Object.keys(data.item_totals).length > 0) {
                     new Chart(document.getElementById('itemChart'), {
                         type: 'bar',
                         data: {
                             labels: Object.keys(data.item_totals),
-                            datasets: [{
-                                label: 'Quantity Sold',
-                                data: Object.values(data.item_totals),
-                                backgroundColor: '#00BFFF',
-                                borderRadius: 8
-                            }]
+                            datasets: [{ label: 'Qty Sold', data: Object.values(data.item_totals),
+                                backgroundColor: '#42A5F5', borderRadius: 8 }]
                         },
                         options: { responsive: true, plugins: { legend: { display: false } } }
                     });
                 }
-
-                // Today's summary
-                const today = new Date().toISOString().split('T')[0];
-                const todayRevenue = data.daily_totals[today] || 0;
-                document.getElementById('today-revenue').textContent =
-                    'KSh ' + todayRevenue.toLocaleString('en-KE', {minimumFractionDigits: 2});
             });
     </script>
 </body>

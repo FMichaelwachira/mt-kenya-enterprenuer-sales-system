@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory — {{ settings.business_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: {{ settings.business_color }};
+            --primary-dark: {{ settings.business_color }};
+        }
+        .btn-primary { background: {{ settings.business_color }}; }
+        .stock-ok { color: #2E7D32; font-weight: 600; }
+        .stock-low { color: #C62828; font-weight: 600; }
+        .stock-medium { color: #F57F17; font-weight: 600; }
+        .expiry-warning { color: #C62828; font-weight: 600; }
+        .profit-badge {
+            background: rgba(46,125,50,0.1);
+            color: #2E7D32;
+            border: 1px solid rgba(46,125,50,0.3);
+            border-radius: 6px;
+            padding: 0.2rem 0.6rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="dashboard-page">
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="nav-icon">🏢</span>
+            <span>{{ settings.business_name }}</span>
+        </div>
+        <div class="nav-right">
+            <a href="/owner" class="btn-secondary" style="padding:0.5rem 1rem; font-size:0.85rem;">← Dashboard</a>
+            <a href="/logout" class="btn-logout">🚪 Logout</a>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="page-title">
+            <h2>📦 Smart Inventory</h2>
+            <p>Manage your products, stock levels and expiry dates</p>
+        </div>
+
+        <div id="inv-alert"></div>
+
+        <!-- Summary Cards -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-icon">📦</div>
+                <div class="metric-value">{{ inventory|length }}</div>
+                <div class="metric-label">Total Products</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">🚨</div>
+                <div class="metric-value" style="color:#C62828;">{{ low_stock|length }}</div>
+                <div class="metric-label">Low Stock Items</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">⏰</div>
+                <div class="metric-value" style="color:#F57F17;">{{ expiring|length }}</div>
+                <div class="metric-label">Expiring Soon</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">✅</div>
+                <div class="metric-value" style="color:#2E7D32;">
+                    {{ inventory|selectattr('stock_quantity','gt',5)|list|length }}
+                </div>
+                <div class="metric-label">Well Stocked</div>
+            </div>
+        </div>
+
+        <!-- Low Stock Alerts -->
+        {% if low_stock %}
+        <div class="card" style="border: 2px solid #C62828;">
+            <div class="card-header" style="background: rgba(198,40,40,0.1);">
+                <h3 style="color:#C62828;">🚨 Low Stock Alerts</h3>
+                <span class="badge" style="background:rgba(198,40,40,0.15); color:#C62828; border:1px solid #C62828;">
+                    {{ low_stock|length }} items
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Current Stock</th>
+                                <th>Min Level</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in low_stock %}
+                            <tr>
+                                <td><strong>{{ p.product_name }}</strong></td>
+                                <td>{{ p.category }}</td>
+                                <td class="stock-low">{{ p.stock_quantity }} units</td>
+                                <td>{{ p.low_stock_level }} units</td>
+                                <td>
+                                    <button class="btn-primary" style="padding:0.35rem 0.75rem; font-size:0.8rem;"
+                                            onclick="openRestock({{ p.id }}, '{{ p.product_name }}', {{ p.stock_quantity }})">
+                                        🔄 Restock
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Expiring Soon Alerts -->
+        {% if expiring %}
+        <div class="card" style="border: 2px solid #F57F17;">
+            <div class="card-header" style="background: rgba(245,127,23,0.1);">
+                <h3 style="color:#F57F17;">⏰ Expiring Within 7 Days</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>Product</th><th>Stock</th><th>Expiry Date</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for p in expiring %}
+                            <tr>
+                                <td><strong>{{ p.product_name }}</strong></td>
+                                <td>{{ p.stock_quantity }} units</td>
+                                <td class="expiry-warning">{{ p.expiry_date }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Add Product -->
+        <div class="card">
+            <div class="card-header"><h3>➕ Add New Product</h3></div>
+            <div class="card-body">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>🏷️ Product Name</label>
+                        <input type="text" id="product_name" placeholder="e.g. Sugar 1kg">
+                    </div>
+                    <div class="form-group">
+                        <label>📁 Category</label>
+                        <input type="text" id="category" placeholder="e.g. Groceries" value="General">
+                    </div>
+                    <div class="form-group">
+                        <label>💵 Buying Price ({{ settings.business_currency }})</label>
+                        <input type="number" id="buying_price" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>💰 Selling Price ({{ settings.business_currency }})</label>
+                        <input type="number" id="selling_price" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>📦 Opening Stock (units)</label>
+                        <input type="number" id="stock_quantity" min="0" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>🚨 Low Stock Alert Level</label>
+                        <input type="number" id="low_stock_level" min="1" placeholder="5" value="5">
+                    </div>
+                    <div class="form-group">
+                        <label>📅 Expiry Date (optional)</label>
+                        <input type="date" id="expiry_date">
+                    </div>
+                    <div class="form-group" style="display:flex; align-items:flex-end;">
+                        <div class="info-box" style="margin:0; width:100%;">
+                            💡 Profit per unit = Selling Price - Buying Price
+                        </div>
+                    </div>
+                </div>
+                <button class="btn-primary btn-large" onclick="addProduct()">
+                    ➕ Add to Inventory
+                </button>
+            </div>
+        </div>
+
+        <!-- Inventory Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3>📋 All Products</h3>
+                <div style="display:flex; gap:0.75rem;">
+                    <a href="/export_inventory_csv" class="btn-secondary">📥 Export CSV</a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="filter-row">
+                    <input type="text" id="searchInv" placeholder="🔍 Search products..."
+                           oninput="filterInventory()">
+                </div>
+                {% if inventory %}
+                <div class="table-wrapper">
+                    <table class="data-table" id="invTable">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Buy Price</th>
+                                <th>Sell Price</th>
+                                <th>Profit/Unit</th>
+                                <th>Stock</th>
+                                <th>Expiry</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in inventory %}
+                            <tr>
+                                <td><strong>{{ p.product_name }}</strong></td>
+                                <td>{{ p.category }}</td>
+                                <td>{{ settings.business_currency }} {{ "%.2f"|format(p.buying_price) }}</td>
+                                <td>{{ settings.business_currency }} {{ "%.2f"|format(p.selling_price) }}</td>
+                                <td>
+                                    <span class="profit-badge">
+                                        +{{ settings.business_currency }} {{ "%.2f"|format(p.selling_price - p.buying_price) }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if p.stock_quantity <= p.low_stock_level %}
+                                    <span class="stock-low">{{ p.stock_quantity }} ⚠️</span>
+                                    {% elif p.stock_quantity <= p.low_stock_level * 2 %}
+                                    <span class="stock-medium">{{ p.stock_quantity }}</span>
+                                    {% else %}
+                                    <span class="stock-ok">{{ p.stock_quantity }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if p.expiry_date %}
+                                    <span class="expiry-warning">{{ p.expiry_date }}</span>
+                                    {% else %}
+                                    <span style="color:#5A7A9A;">—</span>
+                                    {% endif %}
+                                </td>
+                                <td style="display:flex; gap:0.5rem;">
+                                    <button class="btn-secondary" style="padding:0.3rem 0.6rem; font-size:0.8rem;"
+                                            onclick="openRestock({{ p.id }}, '{{ p.product_name }}', {{ p.stock_quantity }})">
+                                        🔄
+                                    </button>
+                                    <button onclick="deleteProduct({{ p.id }}, '{{ p.product_name }}')"
+                                            style="background:rgba(198,40,40,0.1); color:#C62828; border:1px solid rgba(198,40,40,0.3);
+                                                   border-radius:6px; padding:0.3rem 0.6rem; cursor:pointer; font-size:0.8rem;">
+                                        🗑️
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">📦</div>
+                    <p>No products yet. Add your first product above!</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Restock Modal -->
+    <div id="restock-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5);
+         z-index:1000; display:none; align-items:center; justify-content:center;">
+        <div style="background:#F5F7FA; border-radius:16px; padding:2rem; width:100%; max-width:400px; margin:1rem;">
+            <h3 style="color:#1A2B3C; margin-bottom:1rem;">🔄 Restock Product</h3>
+            <p id="restock-product-name" style="color:#2C4A6E; margin-bottom:1rem;"></p>
+            <div class="form-group">
+                <label>New Stock Quantity</label>
+                <input type="number" id="restock-qty" min="0" placeholder="Enter new total stock">
+            </div>
+            <input type="hidden" id="restock-product-id">
+            <div style="display:flex; gap:0.75rem; margin-top:1rem;">
+                <button class="btn-primary" style="flex:1;" onclick="confirmRestock()">✅ Update Stock</button>
+                <button onclick="closeRestock()"
+                        style="flex:1; background:#E8EDF2; border:1px solid #DDEAF5; border-radius:8px;
+                               padding:0.75rem; cursor:pointer; font-family:inherit;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        function addProduct() {
+            const data = new URLSearchParams({
+                product_name: document.getElementById('product_name').value,
+                category: document.getElementById('category').value,
+                buying_price: document.getElementById('buying_price').value,
+                selling_price: document.getElementById('selling_price').value,
+                stock_quantity: document.getElementById('stock_quantity').value,
+                low_stock_level: document.getElementById('low_stock_level').value,
+                expiry_date: document.getElementById('expiry_date').value
+            });
+            fetch('/add_product', {method:'POST', body:data})
+            .then(r => r.json())
+            .then(res => {
+                showAlert(document.getElementById('inv-alert'), res.success ? 'success' : 'error',
+                          res.success ? '✅ ' + res.message : '❌ ' + res.message);
+                if (res.success) setTimeout(() => location.reload(), 1500);
+            });
+        }
+
+        function openRestock(id, name, currentQty) {
+            document.getElementById('restock-product-id').value = id;
+            document.getElementById('restock-product-name').textContent = `Product: ${name} (Current: ${currentQty} units)`;
+            document.getElementById('restock-qty').value = currentQty;
+            document.getElementById('restock-modal').style.display = 'flex';
+        }
+
+        function closeRestock() {
+            document.getElementById('restock-modal').style.display = 'none';
+        }
+
+        function confirmRestock() {
+            const data = new URLSearchParams({
+                product_id: document.getElementById('restock-product-id').value,
+                stock_quantity: document.getElementById('restock-qty').value
+            });
+            fetch('/update_stock', {method:'POST', body:data})
+            .then(r => r.json())
+            .then(res => {
+                closeRestock();
+                showAlert(document.getElementById('inv-alert'), 'success', '✅ ' + res.message);
+                setTimeout(() => location.reload(), 1500);
+            });
+        }
+
+        function deleteProduct(id, name) {
+            if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+            fetch('/delete_product', {method:'POST', body: new URLSearchParams({product_id: id})})
+            .then(r => r.json())
+            .then(res => {
+                showAlert(document.getElementById('inv-alert'), res.success ? 'success' : 'error',
+                          res.success ? '✅ ' + res.message : '❌ ' + res.message);
+                if (res.success) setTimeout(() => location.reload(), 1500);
+            });
+        }
+
+        function filterInventory() {
+            const input = document.getElementById('searchInv').value.toLowerCase();
+            document.querySelectorAll('#invTable tbody tr').forEach(row => {
+                row.style.display = row.textContent.toLowerCase().includes(input) ? '' : 'none';
+            });
+        }
+    </script>
+</body>
+</html>

@@ -7,12 +7,15 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
-        :root { --primary: {{ settings.business_color }}; --primary-dark: {{ settings.business_color }}; }
-        .btn-primary, .metric-value, .data-table .amount, .total-badge, .total-display { color: {{ settings.business_color }}; }
+        :root { --primary: {{ settings.business_color }}; }
         .btn-primary { background: {{ settings.business_color }}; color: white; }
+        .total-display, .data-table .amount, .total-badge { color: {{ settings.business_color }}; }
         .change-display { background: {{ settings.business_color }}; color: white; border-radius: 8px; padding: 0.75rem 1rem; text-align: center; }
         .change-label { font-size: 0.8rem; opacity: 0.85; margin-bottom: 0.25rem; }
         .change-amount { font-size: 1.5rem; font-weight: 700; }
+        .product-select { background:#fff; border:1px solid #DDEAF5; border-radius:8px; padding:0.75rem 1rem; color:#1A2B3C; font-family:inherit; font-size:0.9rem; width:100%; outline:none; }
+        .stock-badge { font-size:0.75rem; color:#2E7D32; font-weight:600; margin-top:0.25rem; }
+        .stock-low-badge { font-size:0.75rem; color:#C62828; font-weight:600; margin-top:0.25rem; }
     </style>
 </head>
 <body class="dashboard-page">
@@ -30,7 +33,7 @@
     <div class="main-content">
         <div class="page-title">
             <h2>📝 Seller Portal</h2>
-            <p>Welcome back, <strong>{{ username }}</strong>!</p>
+            <p>Welcome back, <strong>{{ username }}</strong>! Record your sales below.</p>
         </div>
 
         {% if success %}
@@ -42,60 +45,92 @@
 
         {% if last_sale %}
         <div class="card" style="border: 2px solid {{ settings.business_color }};">
-            <div class="card-header">
-                <h3>🧾 Sale Recorded — Print Receipt?</h3>
-            </div>
+            <div class="card-header"><h3>🧾 Sale Recorded — Print Receipt?</h3></div>
             <div class="card-body">
                 <div class="form-grid">
                     <div>
                         <div class="metric-label">Item</div>
-                        <div class="metric-value">{{ last_sale.item_name }}</div>
+                        <div style="font-weight:700; color:#1A2B3C;">{{ last_sale.item_name }}</div>
                     </div>
                     <div>
                         <div class="metric-label">Total</div>
-                        <div class="metric-value">{{ settings.business_currency }} {{ "%.2f"|format(last_sale.total_price) }}</div>
+                        <div style="font-weight:700; color:{{ settings.business_color }};">{{ settings.business_currency }} {{ "%.2f"|format(last_sale.total_price) }}</div>
                     </div>
                     <div>
                         <div class="metric-label">Amount Paid</div>
-                        <div class="metric-value">{{ settings.business_currency }} {{ "%.2f"|format(last_sale.amount_paid) }}</div>
+                        <div style="font-weight:700; color:#1A2B3C;">{{ settings.business_currency }} {{ "%.2f"|format(last_sale.amount_paid) }}</div>
                     </div>
                     <div>
                         <div class="metric-label">Change</div>
-                        <div class="metric-value">{{ settings.business_currency }} {{ "%.2f"|format(last_sale.change_given) }}</div>
+                        <div style="font-weight:700; color:#2E7D32;">{{ settings.business_currency }} {{ "%.2f"|format(last_sale.change_given) }}</div>
                     </div>
                 </div>
-                <a href="/receipt/{{ last_sale.id }}" target="_blank" class="btn-primary btn-full" style="display:block; text-align:center; text-decoration:none; padding:0.875rem; border-radius:8px; margin-top:1rem;">
+                <a href="/receipt/{{ last_sale.id }}" target="_blank"
+                   style="display:block; text-align:center; text-decoration:none; padding:0.875rem;
+                          border-radius:8px; margin-top:1rem; background:{{ settings.business_color }}; color:white; font-weight:600;">
                     🖨️ View & Print Receipt
                 </a>
             </div>
         </div>
         {% endif %}
 
+        <!-- Sale Form -->
         <div class="card">
             <div class="card-header"><h3>🛒 Record a New Sale</h3></div>
             <div class="card-body">
                 <form method="POST" class="sale-form">
                     <div class="form-grid">
+
+                        <!-- Product Selector -->
                         <div class="form-group">
-                            <label>🛒 Item Name</label>
-                            <input type="text" name="item_name" placeholder="Enter item name" required>
+                            <label>🛒 Select Product</label>
+                            {% if products %}
+                            <select class="product-select" id="product_select" onchange="fillProduct()">
+                                <option value="">-- Select from inventory --</option>
+                                {% for p in products %}
+                                <option value="{{ p['product_name'] }}"
+                                        data-price="{{ p['selling_price'] }}"
+                                        data-stock="{{ p['stock_quantity'] }}"
+                                        data-low="{{ p['low_stock_level'] }}">
+                                    {{ p['product_name'] }} (Stock: {{ p['stock_quantity'] }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div id="stock-info" class="stock-badge"></div>
+                            {% else %}
+                            <div class="info-box">No products in inventory yet. Owner must add products first.</div>
+                            {% endif %}
                         </div>
+
+                        <!-- Or type manually -->
+                        <div class="form-group">
+                            <label>✏️ Or Type Item Name Manually</label>
+                            <input type="text" name="item_name" id="item_name" placeholder="Type item name here">
+                        </div>
+
                         <div class="form-group">
                             <label>📦 Quantity</label>
-                            <input type="number" name="quantity" min="1" value="1" id="quantity" oninput="calcTotal()" required>
+                            <input type="number" name="quantity" min="1" value="1"
+                                   id="quantity" oninput="calcTotal()" required>
                         </div>
+
                         <div class="form-group">
                             <label>💵 Unit Price ({{ settings.business_currency }})</label>
-                            <input type="number" name="unit_price" min="0" step="0.01" placeholder="0.00" id="unit_price" oninput="calcTotal()" required>
+                            <input type="number" name="unit_price" min="0" step="0.01"
+                                   placeholder="0.00" id="unit_price" oninput="calcTotal()" required>
                         </div>
+
                         <div class="form-group">
                             <label>💰 Total (Auto-calculated)</label>
                             <div class="total-display" id="total_display">{{ settings.business_currency }} 0.00</div>
                         </div>
+
                         <div class="form-group">
                             <label>💵 Amount Given by Customer ({{ settings.business_currency }})</label>
-                            <input type="number" name="amount_paid" min="0" step="0.01" placeholder="0.00" id="amount_paid" oninput="calcChange()" required>
+                            <input type="number" name="amount_paid" min="0" step="0.01"
+                                   placeholder="0.00" id="amount_paid" oninput="calcChange()" required>
                         </div>
+
                         <div class="form-group">
                             <label>🔄 Change to Give Back</label>
                             <div class="change-display">
@@ -103,12 +138,14 @@
                                 <div class="change-amount" id="change_display">{{ settings.business_currency }} 0.00</div>
                             </div>
                         </div>
+
                     </div>
                     <button type="submit" class="btn-primary btn-full btn-large">✅ Record Sale</button>
                 </form>
             </div>
         </div>
 
+        <!-- Sales History -->
         <div class="card">
             <div class="card-header">
                 <h3>📊 Your Sales History</h3>
@@ -120,13 +157,8 @@
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Item</th>
-                                <th>Qty</th>
-                                <th>Unit Price</th>
-                                <th>Total</th>
-                                <th>Change</th>
-                                <th>Date & Time</th>
-                                <th>Receipt</th>
+                                <th>Item</th><th>Qty</th><th>Unit Price</th>
+                                <th>Total</th><th>Change</th><th>Date & Time</th><th>Receipt</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -138,7 +170,8 @@
                                 <td class="amount">{{ settings.business_currency }} {{ "%.2f"|format(sale['total_price']) }}</td>
                                 <td>{{ settings.business_currency }} {{ "%.2f"|format(sale['change_given']) }}</td>
                                 <td>{{ sale['date_time'] }}</td>
-                                <td><a href="/receipt/{{ sale['id'] }}" target="_blank" style="color:{{ settings.business_color }}; text-decoration:none;">🖨️</a></td>
+                                <td><a href="/receipt/{{ sale['id'] }}" target="_blank"
+                                       style="color:{{ settings.business_color }}; text-decoration:none; font-size:1.1rem;">🖨️</a></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -147,7 +180,7 @@
                 {% else %}
                 <div class="empty-state">
                     <div class="empty-icon">📭</div>
-                    <p>No sales recorded yet. Start recording your first sale above!</p>
+                    <p>No sales yet. Record your first sale above!</p>
                 </div>
                 {% endif %}
             </div>
@@ -157,6 +190,27 @@
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
         const currency = "{{ settings.business_currency }}";
+
+        function fillProduct() {
+            const sel = document.getElementById('product_select');
+            const opt = sel.options[sel.selectedIndex];
+            if (opt.value) {
+                document.getElementById('item_name').value = opt.value;
+                document.getElementById('unit_price').value = opt.dataset.price;
+                const stock = parseInt(opt.dataset.stock);
+                const low = parseInt(opt.dataset.low);
+                const info = document.getElementById('stock-info');
+                if (stock <= low) {
+                    info.className = 'stock-low-badge';
+                    info.textContent = `⚠️ Low stock! Only ${stock} units remaining`;
+                } else {
+                    info.className = 'stock-badge';
+                    info.textContent = `✅ ${stock} units available`;
+                }
+                calcTotal();
+            }
+        }
+
         function calcTotal() {
             const qty = parseFloat(document.getElementById('quantity').value) || 0;
             const price = parseFloat(document.getElementById('unit_price').value) || 0;
@@ -165,6 +219,7 @@
                 currency + ' ' + total.toLocaleString('en-KE', {minimumFractionDigits:2, maximumFractionDigits:2});
             calcChange();
         }
+
         function calcChange() {
             const qty = parseFloat(document.getElementById('quantity').value) || 0;
             const price = parseFloat(document.getElementById('unit_price').value) || 0;
@@ -172,8 +227,9 @@
             const paid = parseFloat(document.getElementById('amount_paid').value) || 0;
             const change = paid - total;
             const el = document.getElementById('change_display');
-            el.textContent = currency + ' ' + Math.max(0, change).toLocaleString('en-KE', {minimumFractionDigits:2, maximumFractionDigits:2});
-            el.style.color = change < 0 ? '#ff6b6b' : 'white';
+            el.textContent = currency + ' ' + Math.max(0, change).toLocaleString('en-KE',
+                {minimumFractionDigits:2, maximumFractionDigits:2});
+            el.parentElement.style.background = change < 0 ? '#C62828' : '{{ settings.business_color }}';
         }
     </script>
 </body>
