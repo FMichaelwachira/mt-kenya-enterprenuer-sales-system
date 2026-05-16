@@ -185,7 +185,31 @@
                 {% endif %}
             </div>
         </div>
-    </div>
+
+        <!-- Change Password -->
+        <div class="card">
+            <div class="card-header"><h3>🔑 Change My Password</h3></div>
+            <div class="card-body">
+                <div id="change-pass-alert"></div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>🔒 Current Password</label>
+                        <input type="password" id="old_password" placeholder="Enter current password">
+                    </div>
+                    <div class="form-group">
+                        <label>🔑 New Password</label>
+                        <input type="password" id="new_password" placeholder="Enter new password">
+                    </div>
+                    <div class="form-group">
+                        <label>✅ Confirm New Password</label>
+                        <input type="password" id="confirm_password" placeholder="Confirm new password">
+                    </div>
+                </div>
+                <button class="btn-primary" onclick="changePassword()">🔑 Change Password</button>
+            </div>
+        </div>
+
+    </div><!-- end main-content -->
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
@@ -230,6 +254,26 @@
             el.textContent = currency + ' ' + Math.max(0, change).toLocaleString('en-KE',
                 {minimumFractionDigits:2, maximumFractionDigits:2});
             el.parentElement.style.background = change < 0 ? '#C62828' : '{{ settings.business_color }}';
+        }
+    
+        function changePassword() {
+            const alertDiv = document.getElementById('change-pass-alert');
+            const data = new URLSearchParams({
+                old_password: document.getElementById('old_password').value,
+                new_password: document.getElementById('new_password').value,
+                confirm_password: document.getElementById('confirm_password').value
+            });
+            fetch('/change_password', {method:'POST', body:data})
+            .then(r => r.json())
+            .then(res => {
+                showAlert(alertDiv, res.success ? 'success' : 'error',
+                          res.success ? '✅ ' + res.message : '❌ ' + res.message);
+                if (res.success) {
+                    document.getElementById('old_password').value = '';
+                    document.getElementById('new_password').value = '';
+                    document.getElementById('confirm_password').value = '';
+                }
+            });
         }
     </script>
 </body>

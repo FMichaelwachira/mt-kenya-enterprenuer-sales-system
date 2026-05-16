@@ -219,12 +219,19 @@
                 <div class="card-body">
                     <div class="table-wrapper">
                         <table class="data-table">
-                            <thead><tr><th>Username</th><th>Role</th></tr></thead>
+                            <thead><tr><th>Username</th><th>Role</th><th>Action</th></tr></thead>
                             <tbody>
                                 {% for user in users %}
                                 <tr>
                                     <td>{{ user['username'] }}</td>
                                     <td><span class="badge badge-{{ user['role'] }}">{{ user['role'] }}</span></td>
+                                    <td>
+                                        <button class="btn-secondary"
+                                                style="padding:0.3rem 0.75rem; font-size:0.8rem;"
+                                                onclick="openResetModal('{{ user['username'] }}')">
+                                            🔑 Reset Password
+                                        </button>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -392,6 +399,66 @@
                     });
                 }
             });
+    </script>
+
+    <!-- Reset Password Modal -->
+    <div class="modal-overlay" id="reset-modal" style="display:none; position:fixed; inset:0;
+         background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background:#F5F7FA; border-radius:16px; padding:2rem; width:100%;
+                    max-width:420px; margin:1rem;">
+            <h3 style="color:#1A2B3C; margin-bottom:0.5rem;">🔑 Reset Password</h3>
+            <p id="reset-modal-name" style="color:#5A7A9A; font-size:0.85rem; margin-bottom:1.5rem;"></p>
+            <div id="reset-alert"></div>
+            <div class="form-group" style="margin-bottom:1rem;">
+                <label>🔑 New Password</label>
+                <input type="password" id="reset-new-password" placeholder="Enter new password">
+            </div>
+            <input type="hidden" id="reset-username">
+            <div style="display:flex; gap:0.75rem; margin-top:1rem;">
+                <button onclick="confirmReset()"
+                        style="flex:1; background:{{ settings.business_color }}; color:white; border:none;
+                               border-radius:8px; padding:0.875rem; font-family:inherit; font-size:0.9rem;
+                               font-weight:600; cursor:pointer;">
+                    ✅ Reset Password
+                </button>
+                <button onclick="closeResetModal()"
+                        style="flex:1; background:#E8EDF2; border:1px solid #DDEAF5; border-radius:8px;
+                               padding:0.875rem; cursor:pointer; font-family:inherit;">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openResetModal(username) {
+            document.getElementById('reset-username').value = username;
+            document.getElementById('reset-modal-name').textContent = `Resetting password for: ${username}`;
+            document.getElementById('reset-new-password').value = '';
+            document.getElementById('reset-modal').style.display = 'flex';
+        }
+        function closeResetModal() {
+            document.getElementById('reset-modal').style.display = 'none';
+        }
+        function confirmReset() {
+            const username = document.getElementById('reset-username').value;
+            const newPassword = document.getElementById('reset-new-password').value;
+            const alertDiv = document.getElementById('reset-alert');
+            if (!newPassword) {
+                alertDiv.innerHTML = '<div class="alert alert-error">❌ Please enter a new password.</div>';
+                return;
+            }
+            fetch('/reset_password', {
+                method: 'POST',
+                body: new URLSearchParams({username: username, new_password: newPassword})
+            })
+            .then(r => r.json())
+            .then(res => {
+                alertDiv.innerHTML = `<div class="alert alert-${res.success ? 'success' : 'error'}">
+                    ${res.success ? '✅' : '❌'} ${res.message}</div>`;
+                if (res.success) setTimeout(() => closeResetModal(), 2000);
+            });
+        }
     </script>
 </body>
 </html>

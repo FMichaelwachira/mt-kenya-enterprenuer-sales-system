@@ -562,6 +562,53 @@ def sales_data():
                     'item_totals':dict(sorted(item_totals.items(),key=lambda x:x[1],reverse=True)[:10]),
                     'today_revenue':today_revenue,'today_count':today_count})
 
+
+# ── RESET PASSWORD (Owner resets for staff) ───────────────────
+@app.route('/reset_password', methods=['POST'])
+def reset_password():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return jsonify({'success': False})
+    username = request.form.get('username')
+    new_password = request.form.get('new_password').strip()
+    if not new_password:
+        return jsonify({'success': False, 'message': 'Please enter a new password.'})
+    hashed = hashlib.sha256(new_password.encode()).hexdigest()
+    conn = get_db()
+    conn.execute("UPDATE users SET password=? WHERE username=?", (hashed, username))
+    conn.commit()
+    conn.close()
+    log_activity(session['username'], 'RESET_PASSWORD', f"Reset password for {username}")
+    return jsonify({'success': True, 'message': f"Password reset for '{username}' successfully!"})
+
+# ── CHANGE PASSWORD (User changes own password) ───────────────
+@app.route('/change_password', methods=['POST'])
+def change_password():
+    if not session.get('logged_in'):
+        return jsonify({'success': False})
+    old_password = request.form.get('old_password').strip()
+    new_password = request.form.get('new_password').strip()
+    confirm_password = request.form.get('confirm_password').strip()
+    if not old_password or not new_password or not confirm_password:
+        return jsonify({'success': False, 'message': 'Please fill in all fields.'})
+    if new_password != confirm_password:
+        return jsonify({'success': False, 'message': 'New passwords do not match.'})
+    if len(new_password) < 6:
+        return jsonify({'success': False, 'message': 'Password must be at least 6 characters.'})
+    old_hashed = hashlib.sha256(old_password.encode()).hexdigest()
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE username=? AND password=?",
+                       (session['username'], old_hashed)).fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Old password is incorrect.'})
+    new_hashed = hashlib.sha256(new_password.encode()).hexdigest()
+    conn.execute("UPDATE users SET password=? WHERE username=?",
+                (new_hashed, session['username']))
+    conn.commit()
+    conn.close()
+    log_activity(session['username'], 'CHANGE_PASSWORD', f"{session['username']} changed their password")
+    return jsonify({'success': True, 'message': 'Password changed successfully!'})
+
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)

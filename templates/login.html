@@ -9,14 +9,24 @@
     <style>
         :root { --primary: {{ settings.business_color }}; --primary-dark: {{ settings.business_color }}; }
         .btn-primary { background: {{ settings.business_color }}; }
+        .forgot-link { color: {{ settings.business_color }}; text-decoration: none; font-size: 0.85rem; }
+        .forgot-link:hover { text-decoration: underline; }
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; }
+        .modal-overlay.active { display:flex; }
+        .modal-box { background:#F5F7FA; border-radius:16px; padding:2rem; width:100%; max-width:420px; margin:1rem; animation: slideUp 0.3s ease; }
+        .modal-box h3 { color:#1A2B3C; margin-bottom:0.5rem; }
+        .modal-box p { color:#5A7A9A; font-size:0.85rem; margin-bottom:1.5rem; }
+        @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
     </style>
 </head>
 <body class="login-page">
+
     <div class="login-bg">
         <div class="bg-overlay"></div>
         <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Mount_Kenya.jpg/1280px-Mount_Kenya.jpg"
              alt="Background" class="bg-image">
     </div>
+
     <div class="login-container">
         <div class="login-card">
             <div class="login-header">
@@ -24,9 +34,11 @@
                 <h1>{{ settings.business_name }}</h1>
                 <p>Sales Management System</p>
             </div>
+
             {% if error %}
             <div class="alert alert-error">❌ {{ error }}</div>
             {% endif %}
+
             <form method="POST" class="login-form">
                 <div class="form-group">
                     <label>👤 Username</label>
@@ -36,11 +48,52 @@
                     <label>🔑 Password</label>
                     <input type="password" name="password" placeholder="Enter your password" required>
                 </div>
-                <button type="submit" class="btn-primary btn-full">Login to Your Account</button>
+
+                <!-- Forgot Password Link -->
+                <div style="text-align:right; margin-top:-0.5rem; margin-bottom:1rem;">
+                    <a href="#" class="forgot-link" onclick="openForgotModal()">
+                        🔒 Forgot Password?
+                    </a>
+                </div>
+
+                <button type="submit" class="btn-primary btn-full">
+                    Login to Your Account
+                </button>
             </form>
-            <div class="login-footer">Powered by {{ settings.business_name }}</div>
+
+            <div class="login-footer">
+                ⚡ Powered by PhanerooHuios Tech Hub
+            </div>
         </div>
     </div>
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+    <!-- Forgot Password Modal -->
+    <div class="modal-overlay" id="forgot-modal">
+        <div class="modal-box">
+            <h3>🔒 Forgot Password?</h3>
+            <p>Contact your business owner or system administrator to reset your password. They can reset it from the Staff Management section in the Owner Dashboard.</p>
+
+            <div style="background:#DDEAF5; border-radius:10px; padding:1rem; margin-bottom:1.5rem;">
+                <p style="color:#1A2B3C; font-weight:600; margin-bottom:0.5rem;">📋 What to tell your owner:</p>
+                <p style="color:#2C4A6E; margin:0;">"Please reset my password in the Staff tab of the dashboard."</p>
+            </div>
+
+            <button onclick="closeForgotModal()"
+                    style="width:100%; background:{{ settings.business_color }}; color:white; border:none;
+                           border-radius:8px; padding:0.875rem; font-family:inherit; font-size:0.9rem;
+                           font-weight:600; cursor:pointer;">
+                ✅ Understood
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function openForgotModal() {
+            document.getElementById('forgot-modal').classList.add('active');
+        }
+        function closeForgotModal() {
+            document.getElementById('forgot-modal').classList.remove('active');
+        }
+    </script>
 </body>
 </html>
