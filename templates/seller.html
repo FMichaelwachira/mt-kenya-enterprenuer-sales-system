@@ -194,15 +194,30 @@
                 <div class="form-grid">
                     <div class="form-group">
                         <label>🔒 Current Password</label>
-                        <input type="password" id="old_password" placeholder="Enter current password">
+                        <div style="position:relative;">
+                            <input type="password" id="old_password" placeholder="Enter current password" style="padding-right:3rem;">
+                            <button type="button" onclick="togglePassword('old_password', this)"
+                                    style="position:absolute; right:0.75rem; top:50%; transform:translateY(-50%);
+                                           background:none; border:none; cursor:pointer; font-size:1.1rem; color:#5A7A9A;">👁️</button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>🔑 New Password</label>
-                        <input type="password" id="new_password" placeholder="Enter new password">
+                        <div style="position:relative;">
+                            <input type="password" id="new_password" placeholder="Enter new password" style="padding-right:3rem;">
+                            <button type="button" onclick="togglePassword('new_password', this)"
+                                    style="position:absolute; right:0.75rem; top:50%; transform:translateY(-50%);
+                                           background:none; border:none; cursor:pointer; font-size:1.1rem; color:#5A7A9A;">👁️</button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>✅ Confirm New Password</label>
-                        <input type="password" id="confirm_password" placeholder="Confirm new password">
+                        <div style="position:relative;">
+                            <input type="password" id="confirm_password" placeholder="Confirm new password" style="padding-right:3rem;">
+                            <button type="button" onclick="togglePassword('confirm_password', this)"
+                                    style="position:absolute; right:0.75rem; top:50%; transform:translateY(-50%);
+                                           background:none; border:none; cursor:pointer; font-size:1.1rem; color:#5A7A9A;">👁️</button>
+                        </div>
                     </div>
                 </div>
                 <button class="btn-primary" onclick="changePassword()">🔑 Change Password</button>

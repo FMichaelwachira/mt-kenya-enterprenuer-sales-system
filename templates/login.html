@@ -46,7 +46,16 @@
                 </div>
                 <div class="form-group">
                     <label>🔑 Password</label>
-                    <input type="password" name="password" placeholder="Enter your password" required>
+                    <div style="position:relative;">
+                        <input type="password" name="password" id="login-password"
+                               placeholder="Enter your password" required
+                               style="padding-right:3rem;">
+                        <button type="button" onclick="togglePassword('login-password', this)"
+                                style="position:absolute; right:0.75rem; top:50%; transform:translateY(-50%);
+                                       background:none; border:none; cursor:pointer; font-size:1.1rem; color:#5A7A9A;">
+                            👁️
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Forgot Password Link -->
@@ -88,6 +97,16 @@
     </div>
 
     <script>
+        function togglePassword(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = '🙈';
+            } else {
+                input.type = 'password';
+                btn.textContent = '👁️';
+            }
+        }
         function openForgotModal() {
             document.getElementById('forgot-modal').classList.add('active');
         }
