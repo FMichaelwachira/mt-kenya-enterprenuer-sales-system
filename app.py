@@ -62,6 +62,15 @@ def init_db():
         date_added TEXT NOT NULL
     )''')
 
+    # ── NEW: Expenses table ──────────────────────────────────
+    c.execute('''CREATE TABLE IF NOT EXISTS expenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        description TEXT NOT NULL,
+        amount REAL NOT NULL,
+        category TEXT DEFAULT 'General',
+        date_time TEXT NOT NULL
+    )''')
+
     # ── NEW: Activity log table ───────────────────────────────
     c.execute('''CREATE TABLE IF NOT EXISTS activity_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -608,6 +617,132 @@ def change_password():
     conn.close()
     log_activity(session['username'], 'CHANGE_PASSWORD', f"{session['username']} changed their password")
     return jsonify({'success': True, 'message': 'Password changed successfully!'})
+
+
+# ── PROFIT INTELLIGENCE ROUTES ───────────────────────────────
+
+@app.route('/profit')
+def profit():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return redirect(url_for('login'))
+    conn = get_db()
+    sales = conn.execute("SELECT * FROM sales ORDER BY date_time DESC").fetchall()
+    expenses = conn.execute("SELECT * FROM expenses ORDER BY date_time DESC").fetchall()
+    inventory = conn.execute("SELECT * FROM inventory").fetchall()
+    conn.close()
+    settings = get_settings()
+    sales_list = [dict(s) for s in sales]
+    expenses_list = [dict(e) for e in expenses]
+    inventory_dict = {i['product_name']: i['buying_price'] for i in inventory}
+
+    # ── Calculate profits ─────────────────────────────────────
+    today = datetime.now().strftime("%Y-%m-%d")
+    this_week_start = datetime.now().strftime("%Y-%W")
+    this_month = datetime.now().strftime("%Y-%m")
+
+    daily_profit = 0
+    weekly_profit = 0
+    monthly_profit = 0
+    total_profit = 0
+    product_profits = {}
+
+    for s in sales_list:
+        buying = inventory_dict.get(s['item_name'], 0)
+        profit_per_unit = s['unit_price'] - buying
+        sale_profit = profit_per_unit * s['quantity']
+        total_profit += sale_profit
+
+        date = s['date_time'][:10]
+        sale_week = datetime.strptime(date, "%Y-%m-%d").strftime("%Y-%W")
+        sale_month = date[:7]
+
+        if date == today:
+            daily_profit += sale_profit
+        if sale_week == this_week_start:
+            weekly_profit += sale_profit
+        if sale_month == this_month:
+            monthly_profit += sale_profit
+
+        if s['item_name'] not in product_profits:
+            product_profits[s['item_name']] = {'profit': 0, 'units': 0, 'revenue': 0}
+        product_profits[s['item_name']]['profit'] += sale_profit
+        product_profits[s['item_name']]['units'] += s['quantity']
+        product_profits[s['item_name']]['revenue'] += s['total_price']
+
+    # Sort by profit
+    top_products = sorted(product_profits.items(), key=lambda x: x[1]['profit'], reverse=True)[:10]
+
+    # ── Expenses ──────────────────────────────────────────────
+    total_expenses = sum(e['amount'] for e in expenses_list)
+    monthly_expenses = sum(e['amount'] for e in expenses_list if e['date_time'][:7] == this_month)
+    net_profit = total_profit - total_expenses
+
+    # ── Business Health Score ─────────────────────────────────
+    health_score = 0
+    if len(sales_list) > 0: health_score += 25
+    if total_profit > 0: health_score += 25
+    if net_profit > 0: health_score += 25
+    low_stock = get_low_stock_products()
+    if len(low_stock) == 0: health_score += 25
+
+    return render_template('profit.html',
+                           settings=settings,
+                           daily_profit=daily_profit,
+                           weekly_profit=weekly_profit,
+                           monthly_profit=monthly_profit,
+                           total_profit=total_profit,
+                           total_expenses=total_expenses,
+                           monthly_expenses=monthly_expenses,
+                           net_profit=net_profit,
+                           top_products=top_products,
+                           expenses=expenses_list,
+                           health_score=health_score,
+                           sales_count=len(sales_list))
+
+@app.route('/add_expense', methods=['POST'])
+def add_expense():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return jsonify({'success': False})
+    description = request.form.get('description', '').strip()
+    amount = float(request.form.get('amount', 0))
+    category = request.form.get('category', 'General')
+    if not description or amount <= 0:
+        return jsonify({'success': False, 'message': 'Please fill in all fields.'})
+    conn = get_db()
+    conn.execute("INSERT INTO expenses (description, amount, category, date_time) VALUES (?,?,?,?)",
+                (description, amount, category, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    conn.commit()
+    conn.close()
+    log_activity(session['username'], 'EXPENSE', f"Added expense: {description} - {amount}")
+    return jsonify({'success': True, 'message': f"Expense '{description}' added!"})
+
+@app.route('/delete_expense', methods=['POST'])
+def delete_expense():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return jsonify({'success': False})
+    expense_id = request.form.get('expense_id')
+    conn = get_db()
+    conn.execute("DELETE FROM expenses WHERE id=?", (expense_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': 'Expense deleted!'})
+
+@app.route('/api/profit_data')
+def profit_data():
+    if not session.get('logged_in'):
+        return jsonify({})
+    conn = get_db()
+    sales = conn.execute("SELECT * FROM sales ORDER BY date_time ASC").fetchall()
+    inventory = conn.execute("SELECT * FROM inventory").fetchall()
+    conn.close()
+    inventory_dict = {i['product_name']: i['buying_price'] for i in inventory}
+    daily_profits = {}
+    for s in sales:
+        date = s['date_time'][:10]
+        buying = inventory_dict.get(s['item_name'], 0)
+        profit = (s['unit_price'] - buying) * s['quantity']
+        daily_profits[date] = daily_profits.get(date, 0) + profit
+    return jsonify({'daily_profits': daily_profits})
 
 if __name__ == '__main__':
     init_db()
