@@ -30,6 +30,7 @@ def init_db():
         total_price REAL NOT NULL,
         amount_paid REAL NOT NULL DEFAULT 0,
         change_given REAL NOT NULL DEFAULT 0,
+        payment_method TEXT DEFAULT 'Cash',
         date_time TEXT NOT NULL
     )''')
     c.execute('''CREATE TABLE IF NOT EXISTS settings (
@@ -62,6 +63,15 @@ def init_db():
         date_added TEXT NOT NULL
     )''')
 
+    # ── NEW: Payment methods table ───────────────────────────
+    c.execute('''CREATE TABLE IF NOT EXISTS payment_methods (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        method_name TEXT NOT NULL,
+        method_type TEXT NOT NULL,
+        details TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1
+    )''')
+
     # ── NEW: Expenses table ──────────────────────────────────
     c.execute('''CREATE TABLE IF NOT EXISTS expenses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,6 +100,7 @@ def init_db():
 
     for col in [
         "ALTER TABLE sales ADD COLUMN amount_paid REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE sales ADD COLUMN payment_method TEXT DEFAULT 'Cash'",
         "ALTER TABLE sales ADD COLUMN change_given REAL NOT NULL DEFAULT 0",
         "ALTER TABLE settings ADD COLUMN business_name TEXT DEFAULT 'My Business'",
         "ALTER TABLE settings ADD COLUMN business_location TEXT DEFAULT ''",
@@ -227,10 +238,12 @@ def seller():
                 error = f"Insufficient stock! Only {product['stock_quantity']} units of {item_name} available."
                 conn.close()
             else:
+                payment_method = request.form.get('payment_method', 'Cash')
                 cursor = conn.execute("""INSERT INTO sales
-                    (seller,item_name,quantity,unit_price,total_price,amount_paid,change_given,date_time)
-                    VALUES (?,?,?,?,?,?,?,?)""",
+                    (seller,item_name,quantity,unit_price,total_price,amount_paid,change_given,payment_method,date_time)
+                    VALUES (?,?,?,?,?,?,?,?,?)""",
                     (session['username'],item_name,quantity,unit_price,total,amount_paid,change,
+                     payment_method,
                      datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
                 sale_id = cursor.lastrowid
 
@@ -618,6 +631,58 @@ def change_password():
     log_activity(session['username'], 'CHANGE_PASSWORD', f"{session['username']} changed their password")
     return jsonify({'success': True, 'message': 'Password changed successfully!'})
 
+
+
+# ── PAYMENT METHODS ROUTES ────────────────────────────────────
+
+@app.route('/payment_methods')
+def payment_methods():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return redirect(url_for('login'))
+    conn = get_db()
+    methods = conn.execute("SELECT * FROM payment_methods ORDER BY id ASC").fetchall()
+    conn.close()
+    settings = get_settings()
+    return render_template('payment_methods.html',
+                           methods=[dict(m) for m in methods],
+                           settings=settings)
+
+@app.route('/add_payment_method', methods=['POST'])
+def add_payment_method():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return jsonify({'success': False})
+    method_name = request.form.get('method_name', '').strip()
+    method_type = request.form.get('method_type', '').strip()
+    details = request.form.get('details', '').strip()
+    if not method_name or not details:
+        return jsonify({'success': False, 'message': 'Please fill in all fields.'})
+    conn = get_db()
+    conn.execute("INSERT INTO payment_methods (method_name, method_type, details) VALUES (?,?,?)",
+                (method_name, method_type, details))
+    conn.commit()
+    conn.close()
+    log_activity(session['username'], 'PAYMENT_METHOD', f"Added payment method: {method_name}")
+    return jsonify({'success': True, 'message': f"'{method_name}' added successfully!"})
+
+@app.route('/delete_payment_method', methods=['POST'])
+def delete_payment_method():
+    if not session.get('logged_in') or session.get('role') != 'owner':
+        return jsonify({'success': False})
+    method_id = request.form.get('method_id')
+    conn = get_db()
+    conn.execute("DELETE FROM payment_methods WHERE id=?", (method_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': 'Payment method deleted!'})
+
+@app.route('/api/payment_methods')
+def get_payment_methods():
+    if not session.get('logged_in'):
+        return jsonify([])
+    conn = get_db()
+    methods = conn.execute("SELECT * FROM payment_methods WHERE is_active=1").fetchall()
+    conn.close()
+    return jsonify([dict(m) for m in methods])
 
 # ── PROFIT INTELLIGENCE ROUTES ───────────────────────────────
 

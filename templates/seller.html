@@ -139,6 +139,25 @@
                             </div>
                         </div>
 
+                        <div class="form-group">
+                            <label>💳 Payment Method</label>
+                            <select name="payment_method" id="payment_method"
+                                    onchange="showPaymentDetails()"
+                                    style="background:#fff; border:1px solid #DDEAF5; border-radius:8px;
+                                           padding:0.75rem 1rem; color:#1A2B3C; font-family:inherit;
+                                           font-size:0.9rem; width:100%;">
+                                <option value="Cash">💵 Cash</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="payment-details-box" style="display:none;">
+                            <label>📋 Payment Instructions</label>
+                            <div id="payment-details"
+                                 style="background:#DDEAF5; border-radius:8px; padding:0.875rem;
+                                        color:#1A2B3C; font-size:0.9rem; line-height:1.6;">
+                            </div>
+                        </div>
+
                     </div>
                     <button type="submit" class="btn-primary btn-full btn-large">✅ Record Sale</button>
                 </form>
@@ -257,6 +276,40 @@
             document.getElementById('total_display').textContent =
                 currency + ' ' + total.toLocaleString('en-KE', {minimumFractionDigits:2, maximumFractionDigits:2});
             calcChange();
+        }
+
+        // Load payment methods
+        let paymentMethods = [];
+        fetch('/api/payment_methods')
+        .then(r => r.json())
+        .then(methods => {
+            paymentMethods = methods;
+            const select = document.getElementById('payment_method');
+            select.innerHTML = '<option value="Cash">💵 Cash</option>';
+            methods.forEach(m => {
+                const icons = {
+                    'Till Number': '📱', 'Paybill': '🏢',
+                    'Pochi la Biashara': '👜', 'Bank Transfer': '🏦',
+                    'Airtel Money': '📱', 'Card': '💳',
+                    'Flutterwave': '⚡', 'Other': '🔄'
+                };
+                const icon = icons[m.method_type] || '💳';
+                select.innerHTML += `<option value="${m.method_name}" data-details="${m.details}">${icon} ${m.method_name}</option>`;
+            });
+        });
+
+        function showPaymentDetails() {
+            const select = document.getElementById('payment_method');
+            const opt = select.options[select.selectedIndex];
+            const details = opt.getAttribute('data-details');
+            const box = document.getElementById('payment-details-box');
+            const detailsDiv = document.getElementById('payment-details');
+            if (details && opt.value !== 'Cash') {
+                detailsDiv.textContent = details;
+                box.style.display = 'block';
+            } else {
+                box.style.display = 'none';
+            }
         }
 
         function calcChange() {

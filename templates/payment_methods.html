@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Methods — {{ settings.business_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: {{ settings.business_color }}; }
+        .btn-primary { background: {{ settings.business_color }}; color: white; }
+        .method-card {
+            background: #F5F7FA;
+            border: 1px solid #DDEAF5;
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.3s ease;
+        }
+        .method-card:hover { box-shadow: 0 4px 20px rgba(21,101,192,0.15); transform: translateY(-2px); }
+        .method-icon { font-size: 2rem; margin-right: 1rem; }
+        .method-name { font-weight: 700; color: #1A2B3C; font-size: 1rem; }
+        .method-details { color: #5A7A9A; font-size: 0.85rem; margin-top: 0.25rem; }
+        .method-type-badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    </style>
+</head>
+<body class="dashboard-page">
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="nav-icon">🏢</span>
+            <span>{{ settings.business_name }}</span>
+        </div>
+        <div class="nav-right">
+            <a href="/owner" class="btn-secondary" style="padding:0.5rem 1rem; font-size:0.85rem;">← Dashboard</a>
+            <a href="/logout" class="btn-logout">🚪 Logout</a>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="page-title">
+            <h2>💳 Payment Methods</h2>
+            <p>Set up how your customers can pay</p>
+        </div>
+
+        <div id="pm-alert"></div>
+
+        <!-- Add Payment Method -->
+        <div class="card">
+            <div class="card-header"><h3>➕ Add Payment Method</h3></div>
+            <div class="card-body">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>💳 Method Type</label>
+                        <select id="method_type" onchange="updateMethodName()"
+                                style="background:#fff; border:1px solid #DDEAF5; border-radius:8px;
+                                       padding:0.75rem 1rem; color:#1A2B3C; font-family:inherit;
+                                       font-size:0.9rem; width:100%;">
+                            <option value="Cash">💵 Cash</option>
+                            <option value="Till Number">📱 Till Number (M-Pesa)</option>
+                            <option value="Paybill">🏢 Paybill (M-Pesa)</option>
+                            <option value="Pochi la Biashara">👜 Pochi la Biashara</option>
+                            <option value="Bank Transfer">🏦 Bank Transfer</option>
+                            <option value="Airtel Money">📱 Airtel Money</option>
+                            <option value="Card">💳 Debit/Credit Card</option>
+                            <option value="Flutterwave">⚡ Flutterwave</option>
+                            <option value="Other">🔄 Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>🏷️ Display Name</label>
+                        <input type="text" id="method_name" placeholder="e.g. M-Pesa Till">
+                    </div>
+                    <div class="form-group">
+                        <label>📋 Payment Details</label>
+                        <input type="text" id="method_details"
+                               placeholder="e.g. Till No: 123456 | Business: My Shop">
+                    </div>
+                </div>
+                <div class="info-box" style="margin-bottom:1rem;">
+                    💡 These details will show to the seller when they select this payment method
+                    so they can guide the customer on how to pay.
+                </div>
+                <button class="btn-primary btn-large" onclick="addPaymentMethod()">
+                    ➕ Add Payment Method
+                </button>
+            </div>
+        </div>
+
+        <!-- Payment Methods List -->
+        <div class="card">
+            <div class="card-header"><h3>💳 Your Payment Methods</h3></div>
+            <div class="card-body">
+                {% if methods %}
+                {% for method in methods %}
+                <div class="method-card">
+                    <div style="display:flex; align-items:center;">
+                        <div class="method-icon">
+                            {% if method.method_type == 'Cash' %}💵
+                            {% elif method.method_type == 'Till Number' %}📱
+                            {% elif method.method_type == 'Paybill' %}🏢
+                            {% elif method.method_type == 'Pochi la Biashara' %}👜
+                            {% elif method.method_type == 'Bank Transfer' %}🏦
+                            {% elif method.method_type == 'Airtel Money' %}📱
+                            {% elif method.method_type == 'Card' %}💳
+                            {% elif method.method_type == 'Flutterwave' %}⚡
+                            {% else %}🔄
+                            {% endif %}
+                        </div>
+                        <div>
+                            <div class="method-name">{{ method.method_name }}</div>
+                            <div class="method-details">{{ method.details }}</div>
+                            <span class="method-type-badge"
+                                  style="background:rgba(21,101,192,0.1); color:{{ settings.business_color }};
+                                         border:1px solid rgba(21,101,192,0.3); margin-top:0.35rem; display:inline-block;">
+                                {{ method.method_type }}
+                            </span>
+                        </div>
+                    </div>
+                    <button onclick="deleteMethod({{ method.id }}, '{{ method.method_name }}')"
+                            style="background:rgba(198,40,40,0.1); color:#C62828;
+                                   border:1px solid rgba(198,40,40,0.3); border-radius:8px;
+                                   padding:0.5rem 0.75rem; cursor:pointer; font-size:0.85rem;">
+                        🗑️ Remove
+                    </button>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">💳</div>
+                    <p>No payment methods yet. Add your first one above!</p>
+                    <p style="font-size:0.85rem; color:#5A7A9A; margin-top:0.5rem;">
+                        Tip: Start by adding Cash, then your Till Number or Paybill
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        function updateMethodName() {
+            const type = document.getElementById('method_type').value;
+            const nameInput = document.getElementById('method_name');
+            const detailsInput = document.getElementById('method_details');
+            const placeholders = {
+                'Cash': ['Cash Payment', 'Accept physical cash from customer'],
+                'Till Number': ['M-Pesa Till', 'Till No: 123456 | Business: My Shop Name'],
+                'Paybill': ['M-Pesa Paybill', 'Paybill: 654321 | Account: Your Name'],
+                'Pochi la Biashara': ['Pochi la Biashara', 'Phone: 0712345678 | Name: Your Name'],
+                'Bank Transfer': ['Bank Transfer', 'KCB Bank | Account: 1234567890 | Name: My Business'],
+                'Airtel Money': ['Airtel Money', 'Phone: 0733456789 | Name: Your Name'],
+                'Card': ['Debit/Credit Card', 'Visa/Mastercard accepted'],
+                'Flutterwave': ['Flutterwave', 'Online payments via Flutterwave'],
+                'Other': ['Other Payment', 'Enter payment details here']
+            };
+            const p = placeholders[type] || ['', ''];
+            nameInput.placeholder = p[0];
+            detailsInput.placeholder = p[1];
+        }
+
+        function addPaymentMethod() {
+            const alertDiv = document.getElementById('pm-alert');
+            const data = new URLSearchParams({
+                method_name: document.getElementById('method_name').value,
+                method_type: document.getElementById('method_type').value,
+                details: document.getElementById('method_details').value
+            });
+            fetch('/add_payment_method', {method:'POST', body:data})
+            .then(r => r.json())
+            .then(res => {
+                showAlert(alertDiv, res.success ? 'success' : 'error',
+                          res.success ? '✅ ' + res.message : '❌ ' + res.message);
+                if (res.success) setTimeout(() => location.reload(), 1500);
+            });
+        }
+
+        function deleteMethod(id, name) {
+            if (!confirm(`Remove "${name}" from payment methods?`)) return;
+            fetch('/delete_payment_method', {
+                method: 'POST',
+                body: new URLSearchParams({method_id: id})
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) location.reload();
+            });
+        }
+    </script>
+</body>
+</html>
